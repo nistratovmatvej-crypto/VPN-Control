@@ -162,6 +162,23 @@ jobs:
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon testDebugUnitTest lintDebug
 
+      - name: Apply legacy-compatible APK signature
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.project.outputs.dir }}
+        run: |
+          set -euo pipefail
+          APK="$(find "$PROJECT_DIR" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          APKSIGNER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner -print -quit)"
+          KEY="$PROJECT_DIR/signing/vpn-control-debug.keystore"
+          test -s "$APK" && test -x "$APKSIGNER" && test -s "$KEY"
+          "$APKSIGNER" sign --ks "$KEY" --ks-key-alias vpncontrol \
+            --ks-pass pass:vpncontrol-debug-only --key-pass pass:vpncontrol-debug-only \
+            --v1-signing-enabled true --v2-signing-enabled true \
+            --out "$APK.signed" "$APK"
+          mv "$APK.signed" "$APK"
+          "$APKSIGNER" verify --verbose "$APK"
+
       - name: Verify VPN integration and launcher metadata
         shell: bash
         env:
