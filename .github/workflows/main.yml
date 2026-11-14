@@ -191,6 +191,11 @@ jobs:
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
+          APKSIGNER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner -print -quit)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          unzip -l "$APK" | grep -q 'lib/arm64-v8a/libam-go.so'
+          echo "APK signature and ARM64 native runtime verified."
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
           grep -q "versionName='0.4.8'" /tmp/vpn-badging.txt
