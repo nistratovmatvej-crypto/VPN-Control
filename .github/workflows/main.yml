@@ -68,7 +68,7 @@ jobs:
           test -n "$MAIN" && test -n "$WG" && test -n "$MON" && test -n "$MANIFEST" && test -n "$GRADLE"
 
           # The original helper returned Unit and caused an invalid Android view hierarchy.
-          sed -i '/^[[:space:]]*private fun line(/c\    private fun line(a: String, b: String, color: Int = muted): View {\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\n    }' "$MAIN"
+          # The committed line() helper already returns a View; do not rewrite its body in CI.
 
           # The AWG backend requires a real TunnelActionHandler instance.
           grep -q 'import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG" || sed -i '/import org.amnezia.awg.backend.GoBackend/a import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG"
