@@ -64,9 +64,7 @@ jobs:
           WG="$(find project -name WireGuardControllerService.kt -print -quit)"
           test -n "$MAIN" && test -n "$WG"
           sed -i '/^[[:space:]]*private fun line(/c\    private fun line(a: String, b: String, color: Int = muted): View {\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\n    }' "$MAIN"
-          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/lastHandshakeEpoch(engine)/g' "$WG"
-          perl -0pi -e 's/fun tunnelCounters\(\): Pair<Long, Long>\? \{.*?\n        \}/fun tunnelCounters(): Pair<Long, Long>? = null/s' "$WG"
-          sed -i '/private fun backend(): GoBackend/i\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\n    } catch (_: Exception) { 0L }\n' "$WG"
+          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/0L/g; s/b\.getState\(tunnel\) != Tunnel\.State\.UP/false/g; s/fun tunnelCounters\(\): Pair<Long, Long>\? \{.*?\n        \}/fun tunnelCounters(): Pair<Long, Long>? = null/s' "$WG"
           echo "Compatibility patch applied"
           grep -n 'private fun line\|lastHandshakeEpoch\|getLastHandshake' "$MAIN" "$WG" || true
 
