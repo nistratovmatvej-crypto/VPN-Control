@@ -116,6 +116,19 @@ class MainActivity : Activity() {
         listOf("all" to "Все приложения через VPN", "include" to "Только выбранные через VPN", "exclude" to "Выбранные напрямую, остальные через VPN").forEach { (value, label) ->
             intro.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); buttonTintList = android.content.res.ColorStateList.valueOf(amber); isChecked = mode == value; setOnClickListener { prefs.edit().putString("routingMode", value).apply(); render() } })
         }
+        intro.addView(CheckBox(this).apply {
+            text = "Автоматически переключать VPN по активному приложению"
+            textSize = 13f; setTextColor(white); buttonTintList = android.content.res.ColorStateList.valueOf(green)
+            isChecked = prefs.getBoolean("autoEnabled", false)
+            setOnCheckedChangeListener { _, checked ->
+                if (checked) startMonitor()
+                else {
+                    prefs.edit().putBoolean("autoEnabled", false).apply()
+                    stopService(Intent(this@MainActivity, AppMonitorService::class.java))
+                    Toast.makeText(this@MainActivity, "Автоматизация выключена", Toast.LENGTH_SHORT).show()
+                }
+            }
+        })
         addCard(intro)
 
         val apps = installedLaunchableApps()
