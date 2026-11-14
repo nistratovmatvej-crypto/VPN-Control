@@ -1,5 +1,5 @@
 
-name: Build VPN Control APK
+name: main.yml
 
 on:
   push:
@@ -13,6 +13,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -23,13 +27,26 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Accept Android licenses
+      - name: Configure Android SDK
         shell: bash
         run: |
-          yes | sdkmanager --licenses
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -f "$SDKMANAGER" ]; then
+            echo "Android SDK manager not found!"
+            find "$ANDROID_HOME" -name sdkmanager -type f
+            exit 1
+          fi
+
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses || true
+
+          "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Extract project
         shell: bash
@@ -44,12 +61,11 @@ jobs:
           GRADLE_FILE=$(find project -name gradlew -type f | head -n 1)
 
           if [ -z "$GRADLE_FILE" ]; then
-            echo "ERROR: Gradle wrapper not found!"
+            echo "Gradle wrapper not found!"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$GRADLE_FILE")
-
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
 
           chmod +x "$GRADLE_FILE"
@@ -58,31 +74,31 @@ jobs:
         working-directory: ${{ steps.project.outputs.dir }}
         shell: bash
         run: |
-          PROPERTIES="gradle/wrapper/gradle-wrapper.properties"
-
-          if [ ! -f "$PROPERTIES" ]; then
-            echo "ERROR: gradle-wrapper.properties not found!"
-            exit 1
-          fi
-
-          sed -i \
-            's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip|' \
-            "$PROPERTIES"
-
-          sed -i '/^distributionSha256Sum=/d' "$PROPERTIES"
-
-          cat "$PROPERTIES"
+          sed -i 's#^distributionUrl=.*#distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip#' \
+            gradle/wrapper/gradle-wrapper.properties
 
       - name: Build APK
         working-directory: ${{ steps.project.outputs.dir }}
-        shell: bash
         run: |
           ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          APK=$(find project -path '*/build/outputs/apk/debug/*.apk' -type f | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "APK file not found!"
+            exit 1
+          fi
+
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: VPN-Control-APK
-          path: project/**/build/outputs/apk/debug/*.apk
+          path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
           
