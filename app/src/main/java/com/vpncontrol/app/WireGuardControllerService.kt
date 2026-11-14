@@ -109,7 +109,7 @@ class WireGuardControllerService : Service() {
                 raw = raw.replace(Regex("(?im)^DNS\\s*=.*$"), "DNS = $dns")
             } else {
                 val peer = Regex("(?im)^\\[Peer\\]").find(raw)?.range?.first ?: raw.length
-                raw = raw.substring(0, peer) + "DNS = $dns\\n" + raw.substring(peer)
+                raw = raw.substring(0, peer) + "DNS = $dns\n" + raw.substring(peer)
             }
         }
         if (directive.isNotBlank()) {
