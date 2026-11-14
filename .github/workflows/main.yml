@@ -56,6 +56,20 @@ jobs:
           echo "===== WireGuardControllerService.kt lines 1-190 ====="
           sed -n '1,190p' "$WG"
 
+      - name: Patch Kotlin API compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          MAIN="$(find project -name MainActivity.kt -print -quit)"
+          WG="$(find project -name WireGuardControllerService.kt -print -quit)"
+          test -n "$MAIN" && test -n "$WG"
+          perl -0pi -e 's/private fun line\(a:String,b:String,color:Int=muted\) \{ val r=LinearLayout\(this\)\.apply \{ orientation=LinearLayout\.HORIZONTAL; gravity=Gravity\.CENTER_VERTICAL; setPadding\(0,dp\(8\),0,dp\(8\)\); addView\(text\(a,14f,white,true\),LinearLayout\.LayoutParams\(0,-2,1f\)\); addView\(text\(b,13f,color,true\)) \}; body\.addView\(r\) \}/private fun line(a:String,b:String,color:Int=muted): View = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(0,dp(8),0,dp(8)); addView(text(a,14f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text(b,13f,color,true)) }/' "$MAIN"
+          perl -0pi -e 's/val s = b\.getStatistics\(tunnel\)\s*Pair\(s\.totalRx\(\), s\.totalTx\(\)\)/return null/' "$WG"
+          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/0L/g' "$WG"
+          echo "Patched line() return type and removed unsupported AWG API calls"
+          grep -n 'private fun line' "$MAIN"
+          grep -n 'getLastHandshake\|totalRx()\|totalTx()' "$WG" || true
+
       - name: Locate Gradle project
         id: project
         shell: bash
