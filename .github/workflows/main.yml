@@ -56,55 +56,59 @@ jobs:
           echo "===== WireGuardControllerService.kt lines 1-190 ====="
           sed -n '1,190p' "$WG"
 
-      - name: Patch Kotlin API compatibility
+      - name: Patch runtime-critical Android integration
         shell: bash
         run: |
           set -euo pipefail
           MAIN="$(find project -name MainActivity.kt -print -quit)"
           WG="$(find project -name WireGuardControllerService.kt -print -quit)"
-          test -n "$MAIN" && test -n "$WG"
-          sed -i '/^[[:space:]]*private fun line(/c\    private fun line(a: String, b: String, color: Int = muted): View {\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\n    }' "$MAIN"
-          sed -i '/import org.amnezia.awg.backend.GoBackend/a import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG"
-          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/lastHandshakeEpoch(engine)/g; s/GoBackend\(context\.applicationContext\)/GoBackend(context.applicationContext, NoopTunnelActionHandler())/g; s/fun tunnelCounters\(\): Pair<Long, Long>\? = null/fun tunnelCounters(): Pair<Long, Long>? {\n            return try {\n                val b = sharedBackend ?: return null\n                val stateMethod = b.javaClass.methods.firstOrNull { it.name == "getState" && it.parameterCount == 1 } ?: return null\n                if (stateMethod.invoke(b, tunnel) != Tunnel.State.UP) return null\n                val statsMethod = b.javaClass.methods.firstOrNull { it.name == "getStatistics" && it.parameterCount == 1 } ?: return null\n                val stats = statsMethod.invoke(b, tunnel) ?: return null\n                val rxMethod = stats.javaClass.methods.firstOrNull { it.name == "totalRx" && it.parameterCount == 0 } ?: return null\n                val txMethod = stats.javaClass.methods.firstOrNull { it.name == "totalTx" && it.parameterCount == 0 } ?: return null\n                val rx = rxMethod.invoke(stats) as? Number ?: return null\n                val tx = txMethod.invoke(stats) as? Number ?: return null\n                Pair(rx.toLong(), tx.toLong())\n            } catch (_: Exception) { null }\n        }/s' "$WG"
-          sed -i '/private fun backend(): GoBackend/i\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\n    } catch (_: Exception) { 0L }\n' "$WG"
-          echo "Compatibility patch applied"
-          grep -n 'private fun line\|lastHandshakeEpoch\|getLastHandshake' "$MAIN" "$WG" || true
-
-      - name: Add polished launcher icon
-        shell: bash
-        run: |
-          set -euo pipefail
+          MON="$(find project -name AppMonitorService.kt -print -quit)"
           MANIFEST="$(find project -path '*/src/main/AndroidManifest.xml' -print -quit)"
-          test -n "$MANIFEST"
-          APP_DIR="$(dirname "$MANIFEST")"
-          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
-            sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"
+          test -n "$MAIN" && test -n "$WG" && test -n "$MON" && test -n "$MANIFEST"
+
+          # Android UI helper must return the constructed View.
+          sed -i '/^[[:space:]]*private fun line(/c\\    private fun line(a: String, b: String, color: Int = muted): View {\\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\\n    }' "$MAIN"
+
+          # The library requires a TunnelActionHandler. A null handler is not safe at runtime.
+          grep -q 'import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG" || sed -i '/import org.amnezia.awg.backend.GoBackend/a import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG"
+          sed -i 's/GoBackend(context.applicationContext)/GoBackend(context.applicationContext, NoopTunnelActionHandler())/' "$WG"
+
+          # Keep the normal connection as a real full-tunnel profile. App routing is opt-in.
+          perl -0pi -e 's/private fun configForActiveProfile\(\): Config \{.*?\n    \}\n\n    private fun connectActiveProfile/private fun configForActiveProfile(): Config {\n        val original = ConfigStore.decrypt(File(filesDir, "active.enc").readBytes()).toString(Charsets.UTF_8)\n        val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)\n        if (!prefs.getBoolean("splitTunnelEnabled", false)) {\n            return ByteArrayInputStream(original.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }\n        }\n        val selected = listOf(\n            "org.telegram.messenger" to prefs.getBoolean("ruleTelegram", true),\n            "com.google.android.youtube" to prefs.getBoolean("ruleYoutube", true),\n            "com.anthropic.claude" to prefs.getBoolean("ruleClaude", false)\n        ).filter { it.second }.map { it.first }.filter { pkg ->\n            try { packageManager.getApplicationInfo(pkg, 0); true } catch (_: Exception) { false }\n        }\n        require(selected.isNotEmpty()) { "В раздельном режиме выбери хотя бы одно установленное приложение" }\n        val withoutOldRules = original.replace(Regex("(?im)^(IncludedApplications|ExcludedApplications)\\\\s*=.*(?:\\\\r?\\\\n|$)"), "")\n        val routed = Regex("(?im)^\\\\[Interface]\\\\s*$").replaceFirst(withoutOldRules,\n            "[Interface]\\\\nIncludedApplications = ${selected.joinToString(", ")}")\n        return ByteArrayInputStream(routed.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }\n    }\n\n    private fun connectActiveProfile/sms' "$WG"
+
+          # Use reflection for optional backend statistics/handshake APIs across AWG library revisions.
+          perl -0pi -e 's/engine\\.getLastHandshake\\(tunnel\\)/lastHandshakeEpoch(engine)/g; s/fun tunnelCounters\\(\\): Pair<Long, Long>\\? = null/fun tunnelCounters(): Pair<Long, Long>? {\n            return try {\n                val b = sharedBackend ?: return null\n                val state = b.javaClass.methods.firstOrNull { it.name == "getState" && it.parameterCount == 1 } ?: return null\n                if (state.invoke(b, tunnel) != Tunnel.State.UP) return null\n                val statsMethod = b.javaClass.methods.firstOrNull { it.name == "getStatistics" && it.parameterCount == 1 } ?: return null\n                val stats = statsMethod.invoke(b, tunnel) ?: return null\n                val rx = stats.javaClass.methods.firstOrNull { it.name == "totalRx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                val tx = stats.javaClass.methods.firstOrNull { it.name == "totalTx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                Pair(rx.toLong(), tx.toLong())\n            } catch (_: Exception) { null }\n        }/s' "$WG"
+          if ! grep -q 'private fun lastHandshakeEpoch' "$WG"; then
+            sed -i '/private fun backend()/i\\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\\n    } catch (_: Exception) { 0L }\\n' "$WG"
           fi
+
+          # Don't publish a successful state before the backend actually accepts the command.
+          sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",true).apply()//' "$MAIN"
+          sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",false).apply()//' "$MAIN"
+          sed -i 's/prefs.edit().putBoolean("vpnWasStarted",effectiveEnabled).apply()/\/\/ The controller service records state only after backend success./' "$MON"
+
+          # App routing is opt-in; expose the mode rather than silently forcing a three-app tunnel.
+          perl -0pi -e 's/(val c=card\(\); c\.addView\(text\("Для каждого приложения можно отдельно включить или выключить правило\. Android требует разрешение «Доступ к статистике использования»\.",12f,muted\)\))/$1\n        val splitRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text("Раздельный туннель · только выбранные приложения", 12f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(Switch(this@MainActivity).apply { isChecked = prefs.getBoolean("splitTunnelEnabled", false); setOnCheckedChangeListener { _, enabled -> prefs.edit().putBoolean("splitTunnelEnabled", enabled).apply() } }) }; c.addView(splitRow)/' "$MAIN"
+
+          # The system binds this protected service; keep it exported with BIND_VPN_SERVICE.
+          sed -i 's|org.amnezia.awg.backend.GoBackend\\$VpnService|org.amnezia.awg.backend.AbstractBackend\\$VpnService|' "$MANIFEST"
+          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"; fi
           sed -i 's|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />|' "$MANIFEST"
-          sed -i 's|org.amnezia.awg.backend.GoBackend\$VpnService|org.amnezia.awg.backend.AbstractBackend\$VpnService|' "$MANIFEST"
-          awk '/<service/ { in_service=1 } in_service && /org.amnezia.awg.backend.AbstractBackend[$]VpnService/ { target=1 } target { gsub(/android:exported="true"/, "android:exported=\"false\"") } in_service && index($0, "</service>") { in_service=0; target=0 } { print }' "$MANIFEST" > "$MANIFEST.tmp"
-          mv "$MANIFEST.tmp" "$MANIFEST"
+
+          APP_DIR="$(dirname "$MANIFEST")"
           mkdir -p "$APP_DIR/res/drawable"
           cat > "$APP_DIR/res/drawable/ic_vpn_control.xml" <<'EOF'
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path android:fillColor="#101827" android:pathData="M0,0h108v108h-108z"/>
-              <path android:fillColor="#FFB45C" android:pathData="M54,7 L96,22 L96,49 C96,74 79,92 54,103 C29,92 12,74 12,49 L12,22 Z"/>
-              <path android:fillColor="#172338" android:pathData="M54,18 L85,29 L85,49 C85,68 72,82 54,91 C36,82 23,68 23,49 L23,29 Z"/>
-              <path android:fillColor="#5BD6A0" android:pathData="M31,47 L39,47 L39,61 L31,61 Z M69,47 L77,47 L77,61 L69,61 Z"/>
-              <path android:fillColor="#F4F6FC" android:pathData="M42,39 L50,39 L50,69 L42,69 Z M58,39 L66,39 L66,69 L58,69 Z M42,35 L66,35 L66,43 L42,43 Z M42,65 L66,65 L66,73 L42,73 Z"/>
-              <path android:fillColor="#5BD6A0" android:pathData="M47,47 L61,47 L61,61 L47,61 Z"/>
+          <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+            <path android:fillColor="#101827" android:pathData="M0,0h108v108h-108z"/>
+            <path android:fillColor="#FFB45C" android:pathData="M54,7 L96,22 L96,49 C96,74 79,92 54,103 C29,92 12,74 12,49 L12,22 Z"/>
+            <path android:fillColor="#172338" android:pathData="M54,18 L85,29 L85,49 C85,68 72,82 54,91 C36,82 23,68 23,49 L23,29 Z"/>
+            <path android:fillColor="#5BD6A0" android:pathData="M31,47 L39,47 L39,61 L31,61 Z M69,47 L77,47 L77,61 L69,61 Z"/>
+            <path android:fillColor="#F4F6FC" android:pathData="M42,39 L50,39 L50,69 L42,69 Z M58,39 L66,39 L66,69 L58,69 Z M42,35 L66,35 L66,43 L42,43 Z M42,65 L66,65 L66,73 L42,73 Z"/>
+            <path android:fillColor="#5BD6A0" android:pathData="M47,47 L61,47 L61,61 L47,61 Z"/>
           </vector>
           EOF
-          if grep -q 'android:icon=' "$MANIFEST"; then
-            sed -i 's/android:icon="[^"]*"/android:icon="@drawable\/ic_vpn_control"/' "$MANIFEST"
-          else
-            sed -i 's/<application/<application android:icon="@drawable\/ic_vpn_control"/' "$MANIFEST"
-          fi
-          echo "Launcher icon configured in $MANIFEST"
+          if grep -q 'android:icon=' "$MANIFEST"; then sed -i 's/android:icon="[^"]*"/android:icon="@drawable\\/ic_vpn_control"/' "$MANIFEST"; else sed -i 's/<application/<application android:icon="@drawable\\/ic_vpn_control"/' "$MANIFEST"; fi
+          echo "Runtime compatibility, full-tunnel default, optional split routing and launcher icon configured."
 
       - name: Locate Gradle project
         id: project
