@@ -12,8 +12,8 @@ android {
         minSdk = 26
         targetSdk = 34
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 11
-        versionName = "0.4.8"
+        versionCode = 12
+        versionName = "0.4.9"
     }
 
     signingConfigs {
@@ -22,6 +22,8 @@ android {
             storePassword = "vpncontrol-debug-only"
             keyAlias = "vpncontrol"
             keyPassword = "vpncontrol-debug-only"
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
