@@ -16,6 +16,21 @@ android {
         versionName = "0.4.7"
     }
 
+    signingConfigs {
+        create("stableDebug") {
+            storeFile = rootProject.file("signing/vpn-control-debug.keystore")
+            storePassword = "vpncontrol-debug-only"
+            keyAlias = "vpncontrol"
+            keyPassword = "vpncontrol-debug-only"
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("stableDebug")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
