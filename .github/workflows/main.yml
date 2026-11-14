@@ -44,6 +44,18 @@ jobs:
           mkdir -p project
           unzip -o vpn-control.zip -d project
 
+      - name: Inspect Kotlin sources before patching
+        shell: bash
+        run: |
+          set -euo pipefail
+          find project -name MainActivity.kt -o -name WireGuardControllerService.kt
+          MAIN="$(find project -name MainActivity.kt -print -quit)"
+          WG="$(find project -name WireGuardControllerService.kt -print -quit)"
+          echo "===== MainActivity.kt lines 1-180 ====="
+          sed -n '1,180p' "$MAIN"
+          echo "===== WireGuardControllerService.kt lines 1-190 ====="
+          sed -n '1,190p' "$WG"
+
       - name: Locate Gradle project
         id: project
         shell: bash
