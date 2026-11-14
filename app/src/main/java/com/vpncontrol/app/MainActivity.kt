@@ -63,7 +63,7 @@ class MainActivity : Activity() {
     private fun render() {
         root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(bg); setPadding(dp(18),dp(10),dp(18),dp(6)) }
         val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; addView(text("VPN CONTROL",22f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text("●",17f,if(File(filesDir,"active.enc").exists())green else amber,true)) }
-        root.addView(header); root.addView(text("NETWORK CONTROL CENTER  ·  0.4.5",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
+        root.addView(header); root.addView(text("NETWORK CONTROL CENTER  ·  0.4.6",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
         val scroll=ScrollView(this).apply { isFillViewport=true }; body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,0,0,dp(8)) }; scroll.addView(body); root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         when(page){"home"->renderHome();"monitor"->renderMonitor();"automation"->renderAutomation();else->renderSettings()}
         nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(4)); background=shape(0xFF111827.toInt(),18) }
@@ -146,7 +146,7 @@ class MainActivity : Activity() {
         apply.addView(button("ПЕРЕПОДКЛЮЧИТЬ VPN", true) {
             if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала импортируй VPN-конфигурацию", Toast.LENGTH_LONG).show()
             else if (prefs.getString("routingMode", "all") == "include" && selected.isEmpty()) Toast.makeText(this, "Выбери хотя бы одно приложение", Toast.LENGTH_LONG).show()
-            else { if (prefs.getBoolean("vpnWasStarted", false)) stopVpn(); handler.postDelayed({ requestVpnStart(); render() }, 900) }
+            else applyRoutingChanges()
         })
         addCard(apply)
     }
@@ -180,7 +180,7 @@ class MainActivity : Activity() {
         section("РАЗРЕШЕНИЯ")
         val a=card();a.addView(line("Статистика приложений",if(hasUsageAccess())"Разрешена" else "Не разрешена",if(hasUsageAccess())green else amber));a.addView(button("УПРАВЛЯТЬ РАЗРЕШЕНИЕМ",false){startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))});addCard(a)
         section("О ПРИЛОЖЕНИИ")
-        val about=card();about.addView(text("VPN Control 0.4.5 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
+        val about=card();about.addView(text("VPN Control 0.4.6 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
     }
 
     private fun selectBestServer() {
@@ -214,6 +214,24 @@ class MainActivity : Activity() {
     private fun startMonitor(){if(!hasUsageAccess()){startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS));return};val vpnConsent=VpnService.prepare(this);if(vpnConsent!=null){startAutomationAfterPermission=true;startActivityForResult(vpnConsent,42);return};prefs.edit().putBoolean("autoEnabled",true).apply();val i=Intent(this,AppMonitorService::class.java);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);Toast.makeText(this,"Автоматика запущена",Toast.LENGTH_SHORT).show()}
     private fun openConfigPicker(){val i=Intent(Intent.ACTION_OPEN_DOCUMENT).apply{addCategory(Intent.CATEGORY_OPENABLE);type="*/*"};startActivityForResult(i,41)}
     @Deprecated("Legacy picker callback") override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode==42){if(resultCode==RESULT_OK){if(startAutomationAfterPermission){startAutomationAfterPermission=false;startMonitor()}else if(autoSelectAfterPermission){autoSelectAfterPermission=false;startAutoSelectService()}else startWireGuard()}else{startAutomationAfterPermission=false;autoSelectAfterPermission=false;Toast.makeText(this,"Разрешение VPN не выдано",Toast.LENGTH_LONG).show()};return};if(requestCode==41&&resultCode==RESULT_OK){val uri=data?.data?:return;try{contentResolver.openInputStream(uri).use{input->val bytes=requireNotNull(input).readBytes();val raw=bytes.toString(Charsets.UTF_8);require(raw.contains("[Interface]")&&raw.contains("[Peer]")){"Файл не похож на конфигурацию WG/AWG"};val hasAwg=Regex("(?im)^(Jc|Jmin|Jmax|S[1-4]|H[1-4]|I[1-5])\\s*=").containsMatchIn(raw);val name=uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.')?:if(hasAwg)"AmneziaWG" else "VPN profile";ProfileStore.add(this,name,bytes);Toast.makeText(this,if(hasAwg)"Профиль AmneziaWG с параметрами обфускации сохранён" else "Профиль сохранён",Toast.LENGTH_LONG).show()}}catch(e:Exception){Toast.makeText(this,"Ошибка импорта: ${e.message}",Toast.LENGTH_LONG).show()};render();return};if(requestCode==43&&resultCode==RESULT_OK){val uri=data?.data;try{val bytes=backupBytes?:error("Архив не подготовлен");contentResolver.openOutputStream(uri!!).use{it!!.write(bytes)};Toast.makeText(this,"Зашифрованная копия сохранена",Toast.LENGTH_LONG).show()}catch(e:Exception){Toast.makeText(this,"Ошибка сохранения: ${e.message}",Toast.LENGTH_LONG).show()}finally{backupBytes=null};return};if(requestCode==44&&resultCode==RESULT_OK){val uri=data?.data;try{val bytes=contentResolver.openInputStream(uri!!).use{it!!.readBytes()};val json=PortableBackup.decrypt(bytes,backupPassword?:error("Пароль отсутствует"));val profiles=org.json.JSONObject(json).getJSONArray("profiles");ProfileStore.importPlainProfiles(this,profiles);Toast.makeText(this,"Профили восстановлены: ${profiles.length()}",Toast.LENGTH_LONG).show()}catch(e:Exception){Toast.makeText(this,"Не удалось восстановить: неверный пароль или повреждённый архив",Toast.LENGTH_LONG).show()}finally{backupPassword?.fill('\u0000');backupPassword=null};render();return}}
+    private fun applyRoutingChanges() {
+        val consent = VpnService.prepare(this)
+        if (consent != null) {
+            startActivityForResult(consent, 42)
+            return
+        }
+        val action = if (prefs.getBoolean("vpnWasStarted", false))
+            WireGuardControllerService.ACTION_RECONNECT
+        else WireGuardControllerService.ACTION_UP
+        try {
+            val intent = Intent(this, WireGuardControllerService::class.java).setAction(action)
+            if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+            Toast.makeText(this, "Применяю настройки маршрутизации и DNS…", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Не удалось применить настройки: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){Toast.makeText(this,"Сначала импортируй .conf",Toast.LENGTH_LONG).show();return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
     private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);Toast.makeText(this,"Подключение запрошено",Toast.LENGTH_SHORT).show()}catch(e:Exception){Toast.makeText(this,"Ошибка VPN: ${e.message}",Toast.LENGTH_LONG).show()}}
     private fun stopVpn(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i)}catch(e:Exception){Toast.makeText(this,"Не удалось отключить: ${e.message}",Toast.LENGTH_LONG).show()}}
