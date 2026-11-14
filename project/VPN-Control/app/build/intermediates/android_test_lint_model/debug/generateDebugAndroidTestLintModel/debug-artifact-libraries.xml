@@ -1,0 +1,29 @@
+<libraries>
+  <library
+      name=":@@:app::debug"
+      project=":app"/>
+  <library
+      name="org.jetbrains.kotlin:kotlin-stdlib:2.2.20@jar"
+      jars="/home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.2.20/5380b19fa1924399b62ce3a1faffebb2b4f82272/kotlin-stdlib-2.2.20.jar"
+      resolved="org.jetbrains.kotlin:kotlin-stdlib:2.2.20"
+      provided="true"/>
+  <library
+      name="com.zaneschepke:amneziawg-android:2.3.7@aar"
+      jars="/home/runner/.gradle/caches/8.13/transforms/b65f6e4f7d88408e5657c530f6ef715e/transformed/amneziawg-android-2.3.7/jars/classes.jar"
+      resolved="com.zaneschepke:amneziawg-android:2.3.7"
+      provided="true"
+      folder="/home/runner/.gradle/caches/8.13/transforms/b65f6e4f7d88408e5657c530f6ef715e/transformed/amneziawg-android-2.3.7"
+      manifest="AndroidManifest.xml"
+      resFolder="res"
+      assetsFolder="assets"
+      lintJar="lint.jar"
+      publicResources="public.txt"
+      symbolFile="R.txt"
+      externalAnnotations="annotations.zip"
+      proguardRules="proguard.txt"/>
+  <library
+      name="org.jetbrains:annotations:13.0@jar"
+      jars="/home/runner/.gradle/caches/modules-2/files-2.1/org.jetbrains/annotations/13.0/919f0dfe192fb4e063e7dacadee7f8bb9a2672a9/annotations-13.0.jar"
+      resolved="org.jetbrains:annotations:13.0"
+      provided="true"/>
+</libraries>

@@ -1,0 +1,27 @@
+<variant
+    name="debug"
+    package="com.vpncontrol.app"
+    minSdkVersion="26"
+    targetSdkVersion="34"
+    debuggable="true"
+    mergedManifest="build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml"
+    partialResultsDir="build/intermediates/unit_test_lint_partial_results/debug/lintAnalyzeDebugUnitTest/out"
+    desugaredMethodsFiles="/home/runner/.gradle/caches/8.13/transforms/daa8b8607bd3041844c3df72e0a96118/transformed/desugar_jdk_libs_configuration-2.1.5-desugar-lint.txt:/home/runner/.gradle/caches/8.13/transforms/b924a8e3bee058d0aea36c918343b191/transformed/D8BackportedDesugaredMethods.txt">
+  <buildFeatures
+      coreLibraryDesugaring="true"
+      namespacing="REQUIRED"/>
+  <sourceProviders>
+  </sourceProviders>
+  <testSourceProviders>
+    <sourceProvider
+        manifests="src/test/AndroidManifest.xml"
+        javaDirectories="src/test/java:src/testDebug/java:src/test/kotlin:src/testDebug/kotlin"
+        assetsDirectories="src/test/assets:src/testDebug/assets"
+        unitTest="true"/>
+  </testSourceProviders>
+  <testFixturesSourceProviders>
+  </testFixturesSourceProviders>
+  <artifact
+      type="UNIT_TEST">
+  </artifact>
+</variant>

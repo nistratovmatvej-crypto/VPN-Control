@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.12.1" type="partial_results">
+    <map id="NotificationPermission">
+        <entry
+            name="source"
+            boolean="true"/>
+    </map>
+    <map id="UnsafeImplicitIntentLaunch">
+            <map id="actionsSent">
+                    <map id="android.settings.PRIVATE_DNS_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+                            line="168"
+                            column="60"
+                            startOffset="24531"
+                            endLine="168"
+                            endColumn="107"
+                            endOffset="24578"/>
+                    </map>
+                    <map id="android.settings.USAGE_ACCESS_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+                            line="129"
+                            column="214"
+                            startOffset="17145"
+                            endLine="129"
+                            endColumn="259"
+                            endOffset="17190"/>
+                        <location id="1"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+                            line="162"
+                            column="68"
+                            startOffset="20394"
+                            endLine="162"
+                            endColumn="113"
+                            endOffset="20439"/>
+                    </map>
+                    <map id="android.settings.VPN_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+                            line="123"
+                            column="316"
+                            startOffset="15526"
+                            endLine="123"
+                            endColumn="352"
+                            endOffset="15562"/>
+                    </map>
+                    <map id="android.settings.WIRELESS_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+                            line="168"
+                            column="142"
+                            startOffset="24613"
+                            endLine="168"
+                            endColumn="183"
+                            endOffset="24654"/>
+                    </map>
+            </map>
+    </map>
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="com.vpncontrol.app.MainActivity"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <entry
+            name="model"
+            string="drawable[ic_vpn_control(U)],style[AppTheme(U)];;;;"/>
+    </map>
+
+</incidents>

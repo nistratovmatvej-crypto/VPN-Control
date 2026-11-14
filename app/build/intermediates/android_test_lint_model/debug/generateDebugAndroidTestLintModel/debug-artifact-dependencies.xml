@@ -1,0 +1,17 @@
+<dependencies>
+  <compile
+      roots=":@@:app::debug,org.jetbrains.kotlin:kotlin-stdlib:2.2.20@jar,com.zaneschepke:amneziawg-android:2.3.7@aar,org.jetbrains:annotations:13.0@jar">
+    <dependency
+        name=":@@:app::debug"
+        simpleName="artifacts::app"/>
+    <dependency
+        name="org.jetbrains.kotlin:kotlin-stdlib:2.2.20@jar"
+        simpleName="org.jetbrains.kotlin:kotlin-stdlib"/>
+    <dependency
+        name="com.zaneschepke:amneziawg-android:2.3.7@aar"
+        simpleName="com.zaneschepke:amneziawg-android"/>
+    <dependency
+        name="org.jetbrains:annotations:13.0@jar"
+        simpleName="org.jetbrains:annotations"/>
+  </compile>
+</dependencies>

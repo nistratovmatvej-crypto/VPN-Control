@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.12.1" type="incidents">
+
+    <incident
+        id="DefaultLocale"
+        severity="warning"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="172"
+            column="268"
+            startOffset="26039"
+            endLine="172"
+            endColumn="329"
+            endOffset="26100"/>
+    </incident>
+
+    <incident
+        id="OldTargetApi"
+        severity="warning"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details.">
+        <fix-replace
+            description="Update targetSdkVersion to 37"
+            oldString="34"
+            replacement="37"
+            priority="0"/>
+        <location
+            file="${:app*projectDir}/build.gradle.kts"
+            line="13"
+            column="9"
+            startOffset="247"
+            endLine="13"
+            endColumn="23"
+            endOffset="261"/>
+    </incident>
+
+    <incident
+        id="UseSwitchCompatOrMaterialCode"
+        severity="warning"
+        message="Use `SwitchCompat` from AppCompat or `MaterialSwitch` from Material library">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="107"
+            column="409"
+            startOffset="12796"
+            endLine="107"
+            endColumn="560"
+            endOffset="12947"/>
+    </incident>
+
+    <incident
+        id="DrawAllocation"
+        severity="warning"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="173"
+            column="493"
+            startOffset="26594"
+            endLine="173"
+            endColumn="516"
+            endOffset="26617"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/AppMonitorService.kt"
+            line="85"
+            column="17"
+            startOffset="4445"
+            endLine="85"
+            endColumn="44"
+            endOffset="4472"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/AppMonitorService.kt"
+            line="91"
+            column="13"
+            startOffset="4754"
+            endLine="91"
+            endColumn="40"
+            endOffset="4781"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/AppMonitorService.kt"
+            line="97"
+            column="21"
+            startOffset="5128"
+            endLine="97"
+            endColumn="48"
+            endOffset="5155"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="146"
+            column="18"
+            startOffset="18352"
+            endLine="146"
+            endColumn="54"
+            endOffset="18388"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="162"
+            column="370"
+            startOffset="20696"
+            endLine="162"
+            endColumn="406"
+            endOffset="20732"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="166"
+            column="147"
+            startOffset="23842"
+            endLine="166"
+            endColumn="183"
+            endOffset="23878"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/MainActivity.kt"
+            line="167"
+            column="142"
+            startOffset="24285"
+            endLine="167"
+            endColumn="178"
+            endOffset="24321"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/TrafficStatsService.kt"
+            line="27"
+            column="13"
+            startOffset="869"
+            endLine="27"
+            endColumn="40"
+            endOffset="896"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/TrafficStatsService.kt"
+            line="31"
+            column="21"
+            startOffset="1157"
+            endLine="31"
+            endColumn="48"
+            endOffset="1184"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/VpnControlApp.kt"
+            line="16"
+            column="21"
+            startOffset="560"
+            endLine="16"
+            endColumn="48"
+            endOffset="587"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/WireGuardControllerService.kt"
+            line="175"
+            column="13"
+            startOffset="8979"
+            endLine="175"
+            endColumn="40"
+            endOffset="9006"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/WireGuardControllerService.kt"
+            line="179"
+            column="13"
+            startOffset="9108"
+            endLine="179"
+            endColumn="40"
+            endOffset="9135"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; `SDK_INT` is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/WireGuardControllerService.kt"
+            line="185"
+            column="21"
+            startOffset="9482"
+            endLine="185"
+            endColumn="48"
+            endOffset="9509"/>
+    </incident>
+
+    <incident
+        id="StaticFieldLeak"
+        severity="warning"
+        message="Do not place Android context classes in static fields (static reference to `GoBackend` which has field `context` pointing to `Context`); this is a memory leak">
+        <location
+            file="${:app*debug*MAIN*sourceProvider*0*javaDir*0}/com/vpncontrol/app/WireGuardControllerService.kt"
+            line="22"
+            column="9"
+            startOffset="778"
+            endLine="22"
+            endColumn="63"
+            endOffset="832"/>
+    </incident>
+
+</incidents>
