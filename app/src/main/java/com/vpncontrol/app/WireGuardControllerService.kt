@@ -114,7 +114,7 @@ class WireGuardControllerService : Service() {
         }
         if (directive.isNotBlank()) {
             val peer = Regex("(?im)^\\[Peer\\]").find(raw)?.range?.first ?: raw.length
-            raw = raw.substring(0, peer) + directive + "\\n" + raw.substring(peer)
+            raw = raw.substring(0, peer) + directive + "\n" + raw.substring(peer)
         }
         return ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }
     }
