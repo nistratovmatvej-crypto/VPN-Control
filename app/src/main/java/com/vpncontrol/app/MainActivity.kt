@@ -96,15 +96,61 @@ class MainActivity : Activity() {
         section("ТРАФИК")
         val t=card();t.addView(line("Сегодня · получено",bytes(TrafficStatsTracker.value(this,"day_rx")),green));t.addView(line("Сегодня · отправлено",bytes(TrafficStatsTracker.value(this,"day_tx")),amber));t.addView(line("Месяц · получено",bytes(TrafficStatsTracker.value(this,"month_rx")),green));t.addView(line("Месяц · отправлено",bytes(TrafficStatsTracker.value(this,"month_tx")),amber));t.addView(text("Счётчики берутся из native AmneziaWG peer statistics и учитывают именно трафик через VPN-туннель. Фоновый сбор работает отдельной службой, пока туннель подключён.",11f,muted));addCard(t)
     }
-    private fun renderAutomation() {
-        section("АВТОМАТИЧЕСКИЕ ПРАВИЛА")
-        val c=card(); c.addView(text("Для каждого приложения можно отдельно включить или выключить правило. Android требует разрешение «Доступ к статистике использования».",12f,muted))
-        ruleSwitch(c,"Telegram","org.telegram.messenger","ruleTelegram",true);ruleSwitch(c,"YouTube","com.google.android.youtube","ruleYoutube",true);ruleSwitch(c,"Claude","com.anthropic.claude","ruleClaude",false)
-        c.addView(gap(8));c.addView(button(if(prefs.getBoolean("autoEnabled",false))"ОСТАНОВИТЬ АВТОМАТИКУ" else "ЗАПУСТИТЬ АВТОМАТИКУ",true){if(prefs.getBoolean("autoEnabled",false)){prefs.edit().putBoolean("autoEnabled",false).apply();stopService(Intent(this,AppMonitorService::class.java))}else startMonitor();render()});addCard(c)
-        section("ЛОГИКА")
-        val info=card();info.addView(text("VPN включается, когда активное приложение имеет включённое правило VPN. При переходе в приложение без такого правила VPN выключается. Для нескольких одновременных окон Android сообщает только верхнее приложение.",12f,muted));info.addView(text("Claude: приложение не закрывается принудительно. Private DNS нельзя переключать обычному приложению Android — доступна только ручная настройка системы.",12f,muted).apply{setPadding(0,dp(10),0,0)});addCard(info)
+    private fun installedLaunchableApps(): List<Pair<String, String>> {
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        return packageManager.queryIntentActivities(launcher, 0)
+            .mapNotNull { info ->
+                val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
+                if (pkg == packageName) return@mapNotNull null
+                pkg to info.loadLabel(packageManager).toString()
+            }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase() }
     }
-    private fun ruleSwitch(parent:LinearLayout,name:String,pkg:String,key:String,default:Boolean){val row=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;gravity=Gravity.CENTER_VERTICAL;setPadding(0,dp(8),0,dp(8));addView(LinearLayout(this@MainActivity).apply{orientation=LinearLayout.VERTICAL;addView(text(name,15f,white,true));addView(text(pkg,10f,muted))},LinearLayout.LayoutParams(0,-2,1f));val sw=Switch(this@MainActivity).apply{isChecked=prefs.getBoolean(key,default);setOnCheckedChangeListener{_,v->prefs.edit().putBoolean(key,v).apply()}};addView(sw)};parent.addView(row)}
+
+    private fun renderAutomation() {
+        section("МАРШРУТИЗАЦИЯ ПРИЛОЖЕНИЙ")
+        val intro = card()
+        intro.addView(text("Выбери, какие приложения должны проходить через VPN. Правило применяется на уровне Android VPN API при следующем подключении.", 12f, muted))
+        val mode = prefs.getString("routingMode", "all") ?: "all"
+        listOf("all" to "Все приложения через VPN", "include" to "Только выбранные через VPN", "exclude" to "Выбранные напрямую, остальные через VPN").forEach { (value, label) ->
+            intro.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); isChecked = mode == value; setOnClickListener { prefs.edit().putString("routingMode", value).apply(); render() } })
+        }
+        addCard(intro)
+        section("СПИСОК ПРИЛОЖЕНИЙ")
+        val selected = prefs.getStringSet("routingPackages", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val list = card()
+        val apps = installedLaunchableApps()
+        list.addView(text("${apps.size} приложений найдено · отмеченные: ${selected.size}", 12f, muted))
+        if (apps.isEmpty()) list.addView(text("Не удалось получить список приложений.", 13f, amber))
+        apps.forEach { (pkg, label) ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(5), 0, dp(5)) }
+            val name = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text(label, 14f, white, true)); addView(text(pkg, 10f, muted)) }
+            row.addView(name, LinearLayout.LayoutParams(0, -2, 1f))
+            row.addView(CheckBox(this).apply { buttonTintList = android.content.res.ColorStateList.valueOf(amber); isChecked = pkg in selected; setOnCheckedChangeListener { _, checked -> if (checked) selected.add(pkg) else selected.remove(pkg); prefs.edit().putStringSet("routingPackages", selected.toSet()).apply() } })
+            list.addView(row)
+        }
+        addCard(list)
+        section("DNS ДЛЯ VPN-ТУННЕЛЯ")
+        val dns = card()
+        dns.addView(text("DNS применяется ко всему VPN-туннелю. Android не позволяет обычному VPN-приложению назначить отдельный DNS каждому выбранному приложению.", 12f, muted))
+        val dnsMode = prefs.getString("dnsMode", "profile") ?: "profile"
+        listOf("profile" to "DNS из конфигурации сервера", "cloudflare" to "Cloudflare · 1.1.1.1", "quad9" to "Quad9 · 9.9.9.9", "google" to "Google · 8.8.8.8").forEach { (value, label) ->
+            dns.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); isChecked = dnsMode == value; setOnClickListener { prefs.edit().putString("dnsMode", value).apply(); render() } })
+        }
+        addCard(dns)
+        section("ПРИМЕНЕНИЕ")
+        val apply = card()
+        apply.addView(text("Изменения маршрутизации и DNS вступят в силу после переподключения VPN.", 12f, muted))
+        apply.addView(gap(8))
+        apply.addView(button("ПЕРЕПОДКЛЮЧИТЬ VPN", true) {
+            if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала импортируй VPN-конфигурацию", Toast.LENGTH_LONG).show()
+            else if (prefs.getString("routingMode", "all") == "include" && selected.isEmpty()) Toast.makeText(this, "Выбери хотя бы одно приложение", Toast.LENGTH_LONG).show()
+            else { if (prefs.getBoolean("vpnWasStarted", false)) stopVpn(); handler.postDelayed({ requestVpnStart(); render() }, 900) }
+        })
+        addCard(apply)
+    }
+
     private fun renderSettings() {
         section("СОХРАНЁННЫЕ СЕРВЕРЫ")
         val profiles = ProfileStore.all(this).sortedByDescending { it.favorite }
