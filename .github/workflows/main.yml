@@ -128,6 +128,22 @@ jobs:
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon --stacktrace assembleDebug
 
+      - name: Run Android tests and lint
+        working-directory: ${{ steps.project.outputs.dir }}
+        run: gradle --no-daemon testDebugUnitTest lintDebug
+
+      - name: Verify launcher metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$(find project -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
+          test -n "$APK" && test -n "$AAPT"
+          "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
+          grep -q '^launchable-activity:' /tmp/vpn-badging.txt
+          grep -q '^application-icon-' /tmp/vpn-badging.txt
+          echo "APK contains launcher activity and application icon."
+
       - name: Find APK
         id: apk
         shell: bash
