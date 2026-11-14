@@ -63,12 +63,12 @@ jobs:
           MAIN="$(find project -name MainActivity.kt -print -quit)"
           WG="$(find project -name WireGuardControllerService.kt -print -quit)"
           test -n "$MAIN" && test -n "$WG"
-          perl -0pi -e 's/private fun line\(a:String,b:String,color:Int=muted\) \{ val r=LinearLayout\(this\)\.apply \{ orientation=LinearLayout\.HORIZONTAL; gravity=Gravity\.CENTER_VERTICAL; setPadding\(0,dp\(8\),0,dp\(8\)\); addView\(text\(a,14f,white,true\),LinearLayout\.LayoutParams\(0,-2,1f\)\); addView\(text\(b,13f,color,true\)) \}; body\.addView\(r\) \}/private fun line(a:String,b:String,color:Int=muted): View = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(0,dp(8),0,dp(8)); addView(text(a,14f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text(b,13f,color,true)) }/' "$MAIN"
-          perl -0pi -e 's/val s = b\.getStatistics\(tunnel\)\s*Pair\(s\.totalRx\(\), s\.totalTx\(\)\)/return null/' "$WG"
-          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/0L/g' "$WG"
-          echo "Patched line() return type and removed unsupported AWG API calls"
-          grep -n 'private fun line' "$MAIN"
-          grep -n 'getLastHandshake\|totalRx()\|totalTx()' "$WG" || true
+          sed -i '/^[[:space:]]*private fun line(/c\    private fun line(a: String, b: String, color: Int = muted): View {\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\n    }' "$MAIN"
+          perl -0pi -e 's/engine\.getLastHandshake\(tunnel\)/lastHandshakeEpoch(engine)/g' "$WG"
+          perl -0pi -e 's/val s = b\.getStatistics\(tunnel\)\s*Pair\(s\.totalRx\(\), s\.totalTx\(\)\)/val stats = b.javaClass.methods.firstOrNull { it.name == "getStatistics" && it.parameterCount == 1 }?.invoke(b, tunnel) ?: return null\n                val rx = stats.javaClass.methods.firstOrNull { it.name == "totalRx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                val tx = stats.javaClass.methods.firstOrNull { it.name == "totalTx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                Pair(rx.toLong(), tx.toLong())/' "$WG"
+          sed -i '/private fun backend(): GoBackend/i\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\n    } catch (_: Exception) { 0L }\n' "$WG"
+          echo "Compatibility patch applied"
+          grep -n 'private fun line\|lastHandshakeEpoch\|getLastHandshake' "$MAIN" "$WG" || true
 
       - name: Locate Gradle project
         id: project
