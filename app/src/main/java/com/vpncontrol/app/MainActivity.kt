@@ -24,9 +24,9 @@ import java.net.InetAddress
 import java.text.DecimalFormat
 
 class MainActivity : Activity() {
-    private val bg = 0xFF090D16.toInt(); private val panel = 0xFF151D2C.toInt(); private val panel2 = 0xFF202B40.toInt()
-    private val white = 0xFFF4F6FC.toInt(); private val muted = 0xFF9AA6BA.toInt(); private val amber = 0xFFFFB45C.toInt()
-    private val blue = 0xFF6750D8.toInt(); private val green = 0xFF5BD6A0.toInt()
+    private val bg = 0xFF0B1519.toInt(); private val panel = 0xFF14262B.toInt(); private val panel2 = 0xFF20383D.toInt()
+    private val white = 0xFFF2F8F6.toInt(); private val muted = 0xFF9CB3AE.toInt(); private val amber = 0xFF65D6C2.toInt()
+    private val blue = 0xFF4B9FD8.toInt(); private val green = 0xFF91DDB5.toInt()
     private val prefs by lazy { getSharedPreferences("vpncontrol", MODE_PRIVATE) }
     private lateinit var root: LinearLayout; private lateinit var body: LinearLayout; private lateinit var nav: LinearLayout
     private var page = "home"; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
@@ -63,7 +63,7 @@ class MainActivity : Activity() {
     private fun render() {
         root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(bg); setPadding(dp(18),dp(10),dp(18),dp(6)) }
         val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; addView(text("VPN CONTROL",22f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text("●",17f,if(File(filesDir,"active.enc").exists())green else amber,true)) }
-        root.addView(header); root.addView(text("NETWORK CONTROL CENTER  ·  0.4.9",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
+        root.addView(header); root.addView(text("NETWORK CONTROL CENTER  ·  0.5.0",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
         val scroll=ScrollView(this).apply { isFillViewport=true }; body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,0,0,dp(8)) }; scroll.addView(body); root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         when(page){"home"->renderHome();"monitor"->renderMonitor();"automation"->renderAutomation();else->renderSettings()}
         nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(4)); background=shape(0xFF111827.toInt(),18) }
@@ -111,40 +111,90 @@ class MainActivity : Activity() {
     private fun renderAutomation() {
         section("МАРШРУТИЗАЦИЯ ПРИЛОЖЕНИЙ")
         val intro = card()
-        intro.addView(text("Выбери, какие приложения должны проходить через VPN. Правило применяется на уровне Android VPN API при следующем подключении.", 12f, muted))
+        intro.addView(text("Настрой правила для приложений. Изменения применяются при следующем подключении или переподключении VPN.", 12f, muted))
         val mode = prefs.getString("routingMode", "all") ?: "all"
         listOf("all" to "Все приложения через VPN", "include" to "Только выбранные через VPN", "exclude" to "Выбранные напрямую, остальные через VPN").forEach { (value, label) ->
-            intro.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); isChecked = mode == value; setOnClickListener { prefs.edit().putString("routingMode", value).apply(); render() } })
+            intro.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); buttonTintList = android.content.res.ColorStateList.valueOf(amber); isChecked = mode == value; setOnClickListener { prefs.edit().putString("routingMode", value).apply(); render() } })
         }
         addCard(intro)
-        section("СПИСОК ПРИЛОЖЕНИЙ")
-        val selected = prefs.getStringSet("routingPackages", emptySet())?.toMutableSet() ?: mutableSetOf()
-        val list = card()
+
         val apps = installedLaunchableApps()
-        list.addView(text("${apps.size} приложений найдено · отмеченные: ${selected.size}", 12f, muted))
-        if (apps.isEmpty()) list.addView(text("Не удалось получить список приложений.", 13f, amber))
-        apps.forEach { (pkg, label) ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(5), 0, dp(5)) }
-            val name = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; addView(text(label, 14f, white, true)); addView(text(pkg, 10f, muted)) }
-            row.addView(name, LinearLayout.LayoutParams(0, -2, 1f))
-            row.addView(CheckBox(this).apply { buttonTintList = android.content.res.ColorStateList.valueOf(amber); isChecked = pkg in selected; setOnCheckedChangeListener { _, checked -> if (checked) selected.add(pkg) else selected.remove(pkg); prefs.edit().putStringSet("routingPackages", selected.toSet()).apply() } })
-            list.addView(row)
+        val selected = prefs.getStringSet("routingPackages", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val dnsRequired = prefs.getStringSet("dnsRequiredPackages", emptySet())?.toMutableSet() ?: mutableSetOf()
+        section("ПРИЛОЖЕНИЯ")
+        val appCard = card()
+        appCard.addView(text("${apps.size} установленных приложений · поиск по названию или пакету", 12f, muted))
+        val search = EditText(this).apply {
+            hint = "⌕  Найти приложение…"
+            textSize = 14f
+            setSingleLine(true)
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(13), dp(11), dp(13), dp(11))
+            background = shape(panel2, 14, 0xFF31545A.toInt())
         }
-        addCard(list)
-        section("DNS ДЛЯ VPN-ТУННЕЛЯ")
+        appCard.addView(search, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10); bottomMargin = dp(8) })
+        val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        appCard.addView(rows)
+        fun populateRows(query: String) {
+            rows.removeAllViews()
+            val filtered = apps.filter { (pkg, label) -> label.contains(query, true) || pkg.contains(query, true) }
+            rows.addView(text("${filtered.size} найдено · VPN: ${selected.size} · ждать DNS: ${dnsRequired.size}", 11f, muted))
+            if (filtered.isEmpty()) rows.addView(text("Ничего не найдено", 13f, muted))
+            filtered.forEach { (pkg, label) ->
+                val item = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(8), 0, dp(8)) }
+                item.addView(text(label, 14f, white, true))
+                item.addView(text(pkg, 10f, muted))
+                val toggles = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+                toggles.addView(CheckBox(this@MainActivity).apply {
+                    text = "Через VPN"; textSize = 11f; setTextColor(white)
+                    buttonTintList = android.content.res.ColorStateList.valueOf(amber)
+                    isChecked = pkg in selected
+                    setOnCheckedChangeListener { _, checked -> if (checked) selected.add(pkg) else selected.remove(pkg); prefs.edit().putStringSet("routingPackages", selected.toSet()).apply() }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                toggles.addView(CheckBox(this@MainActivity).apply {
+                    text = "Только при DNS"; textSize = 11f; setTextColor(white)
+                    buttonTintList = android.content.res.ColorStateList.valueOf(green)
+                    isChecked = pkg in dnsRequired
+                    setOnCheckedChangeListener { _, checked -> if (checked) dnsRequired.add(pkg) else dnsRequired.remove(pkg); prefs.edit().putStringSet("dnsRequiredPackages", dnsRequired.toSet()).apply() }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                item.addView(toggles)
+                rows.addView(item)
+                val divider = View(this).apply { setBackgroundColor(0xFF294247.toInt()) }
+                rows.addView(divider, LinearLayout.LayoutParams(-1, dp(1)))
+            }
+        }
+        populateRows("")
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { populateRows(s?.toString().orEmpty()) }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        addCard(appCard)
+
+        section("ЗАЩИТА DNS")
         val dns = card()
-        dns.addView(text("DNS применяется ко всему VPN-туннелю. Android не позволяет обычному VPN-приложению назначить отдельный DNS каждому выбранному приложению.", 12f, muted))
+        dns.addView(text("Для приложений с отметкой «Только при DNS» VPN-правило не включится, пока проверка DNS не пройдёт. Проверяется реальное разрешение доменного имени, а не просто наличие адреса DNS.", 12f, muted))
+        dns.addView(line("Приложений с ограничением", dnsRequired.size.toString(), green))
+        dns.addView(line("DNS-проверка", if (prefs.getBoolean("dnsGateEnabled", true)) "Включена" else "Выключена", if (prefs.getBoolean("dnsGateEnabled", true)) green else muted))
+        dns.addView(CheckBox(this).apply {
+            text = "Пока DNS не отвечает — не включать VPN для отмеченных приложений"
+            textSize = 13f; setTextColor(white); buttonTintList = android.content.res.ColorStateList.valueOf(green)
+            isChecked = prefs.getBoolean("dnsGateEnabled", true)
+            setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean("dnsGateEnabled", checked).apply(); render() }
+        })
         val dnsMode = prefs.getString("dnsMode", "profile") ?: "profile"
         listOf("profile" to "DNS из конфигурации сервера", "cloudflare" to "Cloudflare · 1.1.1.1", "quad9" to "Quad9 · 9.9.9.9", "google" to "Google · 8.8.8.8").forEach { (value, label) ->
-            dns.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); isChecked = dnsMode == value; setOnClickListener { prefs.edit().putString("dnsMode", value).apply(); render() } })
+            dns.addView(RadioButton(this).apply { text = label; textSize = 14f; setTextColor(white); buttonTintList = android.content.res.ColorStateList.valueOf(amber); isChecked = dnsMode == value; setOnClickListener { prefs.edit().putString("dnsMode", value).apply(); render() } })
         }
         addCard(dns)
+
         section("ПРИМЕНЕНИЕ")
         val apply = card()
         apply.addView(text("Изменения маршрутизации и DNS вступят в силу после переподключения VPN.", 12f, muted))
         apply.addView(gap(8))
         apply.addView(button("ПЕРЕПОДКЛЮЧИТЬ VPN", true) {
-            if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала импортируй VPN-конфигурацию", Toast.LENGTH_LONG).show()
+            if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала добавь профиль MyControl или импортируй конфигурацию", Toast.LENGTH_LONG).show()
             else if (prefs.getString("routingMode", "all") == "include" && selected.isEmpty()) Toast.makeText(this, "Выбери хотя бы одно приложение", Toast.LENGTH_LONG).show()
             else applyRoutingChanges()
         })
@@ -180,7 +230,7 @@ class MainActivity : Activity() {
         section("РАЗРЕШЕНИЯ")
         val a=card();a.addView(line("Статистика приложений",if(hasUsageAccess())"Разрешена" else "Не разрешена",if(hasUsageAccess())green else amber));a.addView(button("УПРАВЛЯТЬ РАЗРЕШЕНИЕМ",false){startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))});addCard(a)
         section("О ПРИЛОЖЕНИИ")
-        val about=card();about.addView(text("VPN Control 0.4.9 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
+        val about=card();about.addView(text("VPN Control 0.5.0 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
     }
 
     private fun selectBestServer() {
