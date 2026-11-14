@@ -164,14 +164,14 @@ jobs:
           grep -Fq 'NoopTunnelActionHandler()' "$WG"
           grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
           ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
-          grep -Fq '0.4.5' "$MAIN"
+          grep -Fq '0.4.6' "$MAIN"
           APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
-          grep -q "versionName='0.4.5'" /tmp/vpn-badging.txt
+          grep -q "versionName='0.4.6'" /tmp/vpn-badging.txt
           echo "APK metadata and runtime integration checks passed."
 
       - name: Promote patched Android source into repository
@@ -188,7 +188,7 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add -A
               if ! git diff --cached --quiet; then
-                git commit -m "Promote verified VPN Control 0.4.5 Android sources"
+                git commit -m "Promote verified VPN Control 0.4.6 Android sources"
                 git push
               fi
               ;;
@@ -212,6 +212,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-Control-0.4.5-debug
+          name: VPN-Control-0.4.6-debug
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
