@@ -76,6 +76,10 @@ jobs:
           MANIFEST="$(find project -path '*/src/main/AndroidManifest.xml' -print -quit)"
           test -n "$MANIFEST"
           APP_DIR="$(dirname "$MANIFEST")"
+          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+            sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"
+          fi
+          sed -i 's|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />|' "$MANIFEST"
           sed -i 's|org.amnezia.awg.backend.GoBackend\$VpnService|org.amnezia.awg.backend.AbstractBackend\$VpnService|' "$MANIFEST"
           awk '/<service/ { in_service=1 } in_service && /org.amnezia.awg.backend.AbstractBackend[$]VpnService/ { target=1 } target { gsub(/android:exported="true"/, "android:exported=\"false\"") } in_service && index($0, "</service>") { in_service=0; target=0 } { print }' "$MANIFEST" > "$MANIFEST.tmp"
           mv "$MANIFEST.tmp" "$MANIFEST"
