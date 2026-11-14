@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -32,68 +34,69 @@ jobs:
             find "$SDK_ROOT" -maxdepth 5 -type f | head -n 100 || true
             exit 1
           fi
-          echo "Using SDK manager: $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
-      - name: Extract project
+      - name: Prepare source tree
+        id: source
         shell: bash
         run: |
           set -euo pipefail
-          test -f vpn-control.zip || { echo "ERROR: vpn-control.zip not found"; exit 1; }
-          mkdir -p project
-          unzip -o vpn-control.zip -d project
-
-      - name: Inspect Kotlin sources before patching
-        shell: bash
-        run: |
-          set -euo pipefail
-          find project -name MainActivity.kt -o -name WireGuardControllerService.kt
-          MAIN="$(find project -name MainActivity.kt -print -quit)"
-          WG="$(find project -name WireGuardControllerService.kt -print -quit)"
-          echo "===== MainActivity.kt lines 1-180 ====="
-          sed -n '1,180p' "$MAIN"
-          echo "===== WireGuardControllerService.kt lines 1-190 ====="
-          sed -n '1,190p' "$WG"
+          if [ -f app/build.gradle.kts ] && [ -f settings.gradle.kts ]; then
+            echo "Using committed Android source tree"
+            echo "dir=$GITHUB_WORKSPACE" >> "$GITHUB_OUTPUT"
+          else
+            test -f vpn-control.zip || { echo "ERROR: vpn-control.zip not found"; exit 1; }
+            mkdir -p project
+            unzip -o vpn-control.zip -d project
+            SRC="$(find project -type f -name settings.gradle.kts -print -quit | xargs dirname)"
+            test -f "$SRC/app/build.gradle.kts"
+            echo "dir=$GITHUB_WORKSPACE/$SRC" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Patch runtime-critical Android integration
         shell: bash
+        env:
+          SRC_ROOT: ${{ steps.source.outputs.dir }}
         run: |
           set -euo pipefail
-          MAIN="$(find project -name MainActivity.kt -print -quit)"
-          WG="$(find project -name WireGuardControllerService.kt -print -quit)"
-          MON="$(find project -name AppMonitorService.kt -print -quit)"
-          MANIFEST="$(find project -path '*/src/main/AndroidManifest.xml' -print -quit)"
-          test -n "$MAIN" && test -n "$WG" && test -n "$MON" && test -n "$MANIFEST"
+          MAIN="$(find "$SRC_ROOT" -name MainActivity.kt -print -quit)"
+          WG="$(find "$SRC_ROOT" -name WireGuardControllerService.kt -print -quit)"
+          MON="$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
+          MANIFEST="$(find "$SRC_ROOT" -path '*/src/main/AndroidManifest.xml' -print -quit)"
+          GRADLE="$(find "$SRC_ROOT" -path '*/app/build.gradle.kts' -print -quit)"
+          test -n "$MAIN" && test -n "$WG" && test -n "$MON" && test -n "$MANIFEST" && test -n "$GRADLE"
 
-          # Android UI helper must return the constructed View.
-          sed -i '/^[[:space:]]*private fun line(/c\\    private fun line(a: String, b: String, color: Int = muted): View {\\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\\n    }' "$MAIN"
+          # The original helper returned Unit and caused an invalid Android view hierarchy.
+          sed -i '/^[[:space:]]*private fun line(/c\    private fun line(a: String, b: String, color: Int = muted): View {\n        return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }\n    }' "$MAIN"
 
-          # The library requires a TunnelActionHandler. A null handler is not safe at runtime.
+          # The AWG backend requires a real TunnelActionHandler instance.
           grep -q 'import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG" || sed -i '/import org.amnezia.awg.backend.GoBackend/a import org.amnezia.awg.backend.NoopTunnelActionHandler' "$WG"
           sed -i 's/GoBackend(context.applicationContext)/GoBackend(context.applicationContext, NoopTunnelActionHandler())/' "$WG"
 
-          # Keep the normal connection as a real full-tunnel profile. App routing is opt-in.
-          perl -0pi -e 's/private fun configForActiveProfile\(\): Config \{.*?\n    \}\n\n    private fun connectActiveProfile/private fun configForActiveProfile(): Config {\n        val original = ConfigStore.decrypt(File(filesDir, "active.enc").readBytes()).toString(Charsets.UTF_8)\n        val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)\n        if (!prefs.getBoolean("splitTunnelEnabled", false)) {\n            return ByteArrayInputStream(original.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }\n        }\n        val selected = listOf(\n            "org.telegram.messenger" to prefs.getBoolean("ruleTelegram", true),\n            "com.google.android.youtube" to prefs.getBoolean("ruleYoutube", true),\n            "com.anthropic.claude" to prefs.getBoolean("ruleClaude", false)\n        ).filter { it.second }.map { it.first }.filter { pkg ->\n            try { packageManager.getApplicationInfo(pkg, 0); true } catch (_: Exception) { false }\n        }\n        require(selected.isNotEmpty()) { "В раздельном режиме выбери хотя бы одно установленное приложение" }\n        val withoutOldRules = original.replace(Regex("(?im)^(IncludedApplications|ExcludedApplications)\\\\s*=.*(?:\\\\r?\\\\n|$)"), "")\n        val routed = Regex("(?im)^\\\\[Interface]\\\\s*$").replaceFirst(withoutOldRules,\n            "[Interface]\\\\nIncludedApplications = ${selected.joinToString(", ")}")\n        return ByteArrayInputStream(routed.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }\n    }\n\n    private fun connectActiveProfile/sms' "$WG"
+          # Never silently force a fixed list of three apps into every VPN connection.
+          perl -0pi -e 's#private fun configForActiveProfile\(\): Config \{.*?\n    \}\n\n    private fun connectActiveProfile#private fun configForActiveProfile(): Config {\n        val original = ConfigStore.decrypt(File(filesDir, "active.enc").readBytes())\n        return ByteArrayInputStream(original).use { Config.parse(it) }\n    }\n\n    private fun connectActiveProfile#s' "$WG"
 
-          # Use reflection for optional backend statistics/handshake APIs across AWG library revisions.
-          perl -0pi -e 's/engine\\.getLastHandshake\\(tunnel\\)/lastHandshakeEpoch(engine)/g; s/fun tunnelCounters\\(\\): Pair<Long, Long>\\? = null/fun tunnelCounters(): Pair<Long, Long>? {\n            return try {\n                val b = sharedBackend ?: return null\n                val state = b.javaClass.methods.firstOrNull { it.name == "getState" && it.parameterCount == 1 } ?: return null\n                if (state.invoke(b, tunnel) != Tunnel.State.UP) return null\n                val statsMethod = b.javaClass.methods.firstOrNull { it.name == "getStatistics" && it.parameterCount == 1 } ?: return null\n                val stats = statsMethod.invoke(b, tunnel) ?: return null\n                val rx = stats.javaClass.methods.firstOrNull { it.name == "totalRx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                val tx = stats.javaClass.methods.firstOrNull { it.name == "totalTx" && it.parameterCount == 0 }?.invoke(stats) as? Number ?: return null\n                Pair(rx.toLong(), tx.toLong())\n            } catch (_: Exception) { null }\n        }/s' "$WG"
+          # Handshake API differs between AWG library revisions; resolve it safely at runtime.
+          sed -i 's/engine.getLastHandshake(tunnel)/lastHandshakeEpoch(engine)/g' "$WG"
           if ! grep -q 'private fun lastHandshakeEpoch' "$WG"; then
-            sed -i '/private fun backend()/i\\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\\n    } catch (_: Exception) { 0L }\\n' "$WG"
+            sed -i '/private fun backend()/i\    private fun lastHandshakeEpoch(engine: GoBackend): Long = try {\n        val method = engine.javaClass.methods.firstOrNull { it.name == "getLastHandshake" && it.parameterCount == 1 } ?: return 0L\n        (method.invoke(engine, tunnel) as? Number)?.toLong() ?: 0L\n    } catch (_: Exception) { 0L }\n' "$WG"
           fi
 
-          # Don't publish a successful state before the backend actually accepts the command.
-          sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",true).apply()//' "$MAIN"
-          sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",false).apply()//' "$MAIN"
-          sed -i 's/prefs.edit().putBoolean("vpnWasStarted",effectiveEnabled).apply()/\/\/ The controller service records state only after backend success./' "$MON"
+          # The controller is the only source of truth for connected/disconnected state.
+          sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",false).apply()}/}/' "$MAIN"
+          sed -i 's/prefs.edit().putBoolean("vpnWasStarted", effectiveEnabled).apply()/\/\/ state is committed by WireGuardControllerService/' "$MON"
 
-          # App routing is opt-in; expose the mode rather than silently forcing a three-app tunnel.
-          perl -0pi -e 's/(val c=card\(\); c\.addView\(text\("Для каждого приложения можно отдельно включить или выключить правило\. Android требует разрешение «Доступ к статистике использования»\.",12f,muted\)\))/$1\n        val splitRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text("Раздельный туннель · только выбранные приложения", 12f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(Switch(this@MainActivity).apply { isChecked = prefs.getBoolean("splitTunnelEnabled", false); setOnCheckedChangeListener { _, enabled -> prefs.edit().putBoolean("splitTunnelEnabled", enabled).apply() } }) }; c.addView(splitRow)/' "$MAIN"
-
-          # The system binds this protected service; keep it exported with BIND_VPN_SERVICE.
-          sed -i 's|org.amnezia.awg.backend.GoBackend\\$VpnService|org.amnezia.awg.backend.AbstractBackend\\$VpnService|' "$MANIFEST"
-          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"; fi
+          # The Android system binds this protected service; keep it exported and permission-guarded.
+          sed -i 's|org.amnezia.awg.backend.GoBackend\$VpnService|org.amnezia.awg.backend.AbstractBackend\$VpnService|' "$MANIFEST"
+          if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
+            sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"
+          fi
           sed -i 's|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />|<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />|' "$MANIFEST"
+
+          # Version the actual app, not only the CI artifact.
+          sed -i 's/versionCode = 6/versionCode = 7/; s/versionName = "0.4.3"/versionName = "0.4.4"/' "$GRADLE"
+          sed -i 's/NETWORK CONTROL CENTER  ·  0.4.1/NETWORK CONTROL CENTER  ·  0.4.4/; s/VPN Control 0.4.1 · AmneziaWG/VPN Control 0.4.4 · AmneziaWG/' "$MAIN"
 
           APP_DIR="$(dirname "$MANIFEST")"
           mkdir -p "$APP_DIR/res/drawable"
@@ -107,20 +110,22 @@ jobs:
             <path android:fillColor="#5BD6A0" android:pathData="M47,47 L61,47 L61,61 L47,61 Z"/>
           </vector>
           EOF
-          if grep -q 'android:icon=' "$MANIFEST"; then sed -i 's/android:icon="[^"]*"/android:icon="@drawable\\/ic_vpn_control"/' "$MANIFEST"; else sed -i 's/<application/<application android:icon="@drawable\\/ic_vpn_control"/' "$MANIFEST"; fi
-          echo "Runtime compatibility, full-tunnel default, optional split routing and launcher icon configured."
+          if grep -q 'android:icon=' "$MANIFEST"; then
+            sed -i 's|android:icon="[^"]*"|android:icon="@drawable/ic_vpn_control"|' "$MANIFEST"
+          else
+            sed -i 's|<application|<application android:icon="@drawable/ic_vpn_control"|' "$MANIFEST"
+          fi
+          echo "Applied runtime fixes and release metadata."
 
       - name: Locate Gradle project
         id: project
         shell: bash
+        env:
+          SRC_ROOT: ${{ steps.source.outputs.dir }}
         run: |
           set -euo pipefail
-          GRADLE_FILE="$(find project -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)"
-          if [ -z "$GRADLE_FILE" ]; then
-            echo "ERROR: settings.gradle(.kts) not found in archive"
-            find project -maxdepth 5 -type f | head -n 200
-            exit 1
-          fi
+          GRADLE_FILE="$(find "$SRC_ROOT" -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)"
+          test -n "$GRADLE_FILE"
           PROJECT_DIR="$(dirname "$GRADLE_FILE")"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
           echo "Gradle project: $PROJECT_DIR"
@@ -134,7 +139,7 @@ jobs:
         run: |
           java -version
           gradle --version
-          echo "ANDROID_HOME=$ANDROID_HOME"
+          test "$(gradle --version | awk '/^Gradle / {print $2; exit}')" = "8.13"
 
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
@@ -144,35 +149,68 @@ jobs:
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon testDebugUnitTest lintDebug
 
-      - name: Verify launcher metadata
+      - name: Verify VPN integration and launcher metadata
         shell: bash
+        env:
+          SRC_ROOT: ${{ steps.source.outputs.dir }}
         run: |
           set -euo pipefail
-          APK="$(find project -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          MANIFEST="$(find "$SRC_ROOT" -path '*/src/main/AndroidManifest.xml' -print -quit)"
+          WG="$(find "$SRC_ROOT" -name WireGuardControllerService.kt -print -quit)"
+          MAIN="$(find "$SRC_ROOT" -name MainActivity.kt -print -quit)"
+          grep -Fq 'org.amnezia.awg.backend.AbstractBackend$VpnService' "$MANIFEST"
+          grep -Fq 'android.permission.BIND_VPN_SERVICE' "$MANIFEST"
+          grep -Fq 'NoopTunnelActionHandler()' "$WG"
+          grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
+          ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
+          grep -Fq '0.4.4' "$MAIN"
+          APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
-          grep -q '^launchable-activity:' /tmp/vpn-badging.txt
-          grep -q '^application-icon-' /tmp/vpn-badging.txt
-          echo "APK contains launcher activity and application icon."
+          grep -q "^launchable-activity:" /tmp/vpn-badging.txt
+          grep -q "^application-icon-" /tmp/vpn-badging.txt
+          grep -q "versionName='0.4.4'" /tmp/vpn-badging.txt
+          echo "APK metadata and runtime integration checks passed."
+
+      - name: Promote patched Android source into repository
+        if: success()
+        shell: bash
+        env:
+          SRC_ROOT: ${{ steps.source.outputs.dir }}
+        run: |
+          set -euo pipefail
+          case "$SRC_ROOT" in
+            "$GITHUB_WORKSPACE/project/"*)
+              rsync -a --exclude='.github/' "$SRC_ROOT"/ "$GITHUB_WORKSPACE"/
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add app build.gradle.kts settings.gradle.kts gradle.properties
+              if ! git diff --cached --quiet; then
+                git commit -m "Promote verified VPN Control 0.4.4 Android sources"
+                git push
+              fi
+              ;;
+            *)
+              echo "Android sources already live in repository root."
+              ;;
+          esac
 
       - name: Find APK
         id: apk
         shell: bash
+        env:
+          SRC_ROOT: ${{ steps.source.outputs.dir }}
         run: |
           set -euo pipefail
-          APK="$(find project -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
-          if [ -z "$APK" ]; then
-            echo "ERROR: Debug APK was not produced"
-            find project -type d -path '*/build/outputs/*' -print
-            exit 1
-          fi
+          APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
+          test -n "$APK" || { echo "ERROR: Debug APK was not produced"; exit 1; }
           echo "path=$APK" >> "$GITHUB_OUTPUT"
           echo "APK: $APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-Control-debug
+          name: VPN-Control-0.4.4-debug
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
