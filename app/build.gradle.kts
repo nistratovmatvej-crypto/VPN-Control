@@ -11,8 +11,9 @@ android {
         applicationId = "com.vpncontrol.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "0.4.6"
+        ndk { abiFilters += listOf("arm64-v8a") }
+        versionCode = 10
+        versionName = "0.4.7"
     }
 
     compileOptions {
