@@ -1,4 +1,3 @@
-
 name: Build VPN Control APK
 
 on:
@@ -12,7 +11,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -24,19 +22,35 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          accept-android-sdk-licenses: true
-          packages: platform-tools
+        uses: android-actions/setup-android@v3
 
-      - name: Verify Android SDK
+      - name: Install Android SDK packages
+        shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
-          sdkmanager --version
+          set -euo pipefail
+          SDKMANAGER=""
+          for candidate in \
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
+            echo "ERROR: sdkmanager not found under Android SDK"
+            echo "ANDROID_HOME=$ANDROID_HOME"
+            find "$ANDROID_HOME" -maxdepth 4 -type f | head -n 80
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Extract project
+        shell: bash
         run: |
+          set -euo pipefail
+          test -f vpn-control.zip || { echo "ERROR: vpn-control.zip not found"; exit 1; }
           mkdir -p project
           unzip -o vpn-control.zip -d project
 
@@ -44,42 +58,49 @@ jobs:
         id: project
         shell: bash
         run: |
-          GRADLE_FILE=$(find project -name settings.gradle -o -name settings.gradle.kts | head -n 1)
-
+          set -euo pipefail
+          GRADLE_FILE="$(find project -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)"
           if [ -z "$GRADLE_FILE" ]; then
-            echo "ERROR: settings.gradle not found!"
-            find project -maxdepth 4 -type f
+            echo "ERROR: settings.gradle(.kts) not found in archive"
+            find project -maxdepth 5 -type f | head -n 200
             exit 1
           fi
-
-          PROJECT_DIR=$(dirname "$GRADLE_FILE")
+          PROJECT_DIR="$(dirname "$GRADLE_FILE")"
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+          echo "Gradle project: $PROJECT_DIR"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
 
-      - name: Build APK
+      - name: Verify toolchain
+        run: |
+          java -version
+          gradle --version
+          echo "ANDROID_HOME=$ANDROID_HOME"
+
+      - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
-        run: gradle assembleDebug --no-daemon
+        run: gradle --no-daemon --stacktrace assembleDebug
 
       - name: Find APK
         id: apk
+        shell: bash
         run: |
-          APK=$(find project -path '*/build/outputs/apk/debug/*.apk' -type f | head -n 1)
-
+          set -euo pipefail
+          APK="$(find project -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           if [ -z "$APK" ]; then
-            echo "ERROR: APK not found!"
+            echo "ERROR: Debug APK was not produced"
+            find project -type d -path '*/build/outputs/*' -print
             exit 1
           fi
-
           echo "path=$APK" >> "$GITHUB_OUTPUT"
+          echo "APK: $APK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-Control-APK
+          name: VPN-Control-debug
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
-          
