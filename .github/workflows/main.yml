@@ -202,8 +202,8 @@ jobs:
           test -n "$APKSIGNER"
           SIGNATURE="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
           printf '%s\n' "$SIGNATURE"
-          grep -Fq 'Verified using v1 scheme (JAR signing): true' <<< "$SIGNATURE"
           grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$SIGNATURE"
+          grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' <<< "$SIGNATURE"
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libam-go.so'
           echo "APK signature and ARM64 native runtime verified."
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
