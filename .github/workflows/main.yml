@@ -142,7 +142,7 @@ jobs:
           gradle --version
           test "$(gradle --version | awk '/^Gradle / {print $2; exit}')" = "8.13"
 
-      - name: Create or reuse stable debug signing key
+      - name: Restore stable debug signing key
         shell: bash
         env:
           PROJECT_DIR: ${{ steps.project.outputs.dir }}
@@ -150,19 +150,9 @@ jobs:
           set -euo pipefail
           KEY="$PROJECT_DIR/signing/vpn-control-debug.keystore"
           mkdir -p "$(dirname "$KEY")"
-          if [ ! -f "$KEY" ]; then
-            keytool -genkeypair -v -keystore "$KEY" -storetype JKS \
-              -storepass vpncontrol-debug-only -keypass vpncontrol-debug-only \
-              -alias vpncontrol -keyalg RSA -keysize 3072 -validity 10000 \
-              -dname "CN=VPN Control Debug, OU=Development, O=VPN Control, L=NA, ST=NA, C=US"
-            git -C "$GITHUB_WORKSPACE" config user.name "github-actions[bot]"
-            git -C "$GITHUB_WORKSPACE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C "$GITHUB_WORKSPACE" add "${KEY#"$GITHUB_WORKSPACE"/}"
-            git -C "$GITHUB_WORKSPACE" commit -m "Add stable debug signing key for installable updates"
-            git -C "$GITHUB_WORKSPACE" push
-          fi
-          test -s "$KEY"
-          echo "Stable signing key is ready."
+          base64 --decode "$GITHUB_WORKSPACE/signing/vpn-control-debug.keystore.base64" > "$KEY"
+          keytool -list -keystore "$KEY" -storepass vpncontrol-debug-only -alias vpncontrol >/dev/null
+          echo "Stable signing key restored."
 
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
