@@ -176,19 +176,22 @@ jobs:
           grep -Fq 'NoopTunnelActionHandler()' "$WG"
           grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
           ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
-          grep -Fq '0.4.9' "$MAIN"
+          grep -Fq '0.5.0' "$MAIN"
           APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
           APKSIGNER="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name apksigner -print -quit)"
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          SIGNATURE="$("$APKSIGNER" verify --verbose --print-certs "$APK" 2>&1)"
+          printf '%s\n' "$SIGNATURE"
+          grep -Fq 'Verified using v1 scheme (JAR signing): true' <<< "$SIGNATURE"
+          grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' <<< "$SIGNATURE"
           unzip -l "$APK" | grep -q 'lib/arm64-v8a/libam-go.so'
           echo "APK signature and ARM64 native runtime verified."
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
-          grep -q "versionName='0.4.9'" /tmp/vpn-badging.txt
+          grep -q "versionName='0.5.0'" /tmp/vpn-badging.txt
           echo "APK metadata and runtime integration checks passed."
 
       - name: Promote patched Android source into repository
@@ -205,7 +208,7 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add -A
               if ! git diff --cached --quiet; then
-                git commit -m "Promote verified VPN Control 0.4.9 ARM64 Android sources"
+                git commit -m "Promote verified VPN Control 0.5.0 ARM64 Android sources"
                 git push
               fi
               ;;
@@ -239,8 +242,8 @@ jobs:
       - name: Publish direct APK download on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.4.9
-          name: VPN Control 0.4.9
+          tag_name: v0.5.0
+          name: VPN Control 0.5.0
           body: |
             Готовый установочный APK для Android (ARM64).
 
