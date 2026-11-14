@@ -187,7 +187,7 @@ class MainActivity : Activity() {
 
         section("ЗАЩИТА DNS")
         val dns = card()
-        dns.addView(text("Для приложений с отметкой «Только при DNS» VPN-правило не включится, пока проверка DNS не пройдёт. Проверяется реальное разрешение доменного имени, а не просто наличие адреса DNS.", 12f, muted))
+        dns.addView(text("Для приложений с отметкой «Только при DNS» автоматика не включит VPN, пока проверка DNS не пройдёт. Проверяется реальное разрешение доменного имени. Для работы включи переключатель автоматизации выше.", 12f, muted))
         dns.addView(line("Приложений с ограничением", dnsRequired.size.toString(), green))
         dns.addView(line("DNS-проверка", if (prefs.getBoolean("dnsGateEnabled", true)) "Включена" else "Выключена", if (prefs.getBoolean("dnsGateEnabled", true)) green else muted))
         dns.addView(CheckBox(this).apply {
