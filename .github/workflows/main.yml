@@ -142,6 +142,28 @@ jobs:
           gradle --version
           test "$(gradle --version | awk '/^Gradle / {print $2; exit}')" = "8.13"
 
+      - name: Create or reuse stable debug signing key
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.project.outputs.dir }}
+        run: |
+          set -euo pipefail
+          KEY="$PROJECT_DIR/signing/vpn-control-debug.keystore"
+          mkdir -p "$(dirname "$KEY")"
+          if [ ! -f "$KEY" ]; then
+            keytool -genkeypair -v -keystore "$KEY" -storetype JKS \
+              -storepass vpncontrol-debug-only -keypass vpncontrol-debug-only \
+              -alias vpncontrol -keyalg RSA -keysize 3072 -validity 10000 \
+              -dname "CN=VPN Control Debug, OU=Development, O=VPN Control, L=NA, ST=NA, C=US"
+            git -C "$GITHUB_WORKSPACE" config user.name "github-actions[bot]"
+            git -C "$GITHUB_WORKSPACE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$GITHUB_WORKSPACE" add "${KEY#"$GITHUB_WORKSPACE"/}"
+            git -C "$GITHUB_WORKSPACE" commit -m "Add stable debug signing key for installable updates"
+            git -C "$GITHUB_WORKSPACE" push
+          fi
+          test -s "$KEY"
+          echo "Stable signing key is ready."
+
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon --stacktrace assembleDebug
@@ -164,14 +186,14 @@ jobs:
           grep -Fq 'NoopTunnelActionHandler()' "$WG"
           grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
           ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
-          grep -Fq '0.4.7' "$MAIN"
+          grep -Fq '0.4.8' "$MAIN"
           APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
           "$AAPT" dump badging "$APK" | tee /tmp/vpn-badging.txt
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
-          grep -q "versionName='0.4.7'" /tmp/vpn-badging.txt
+          grep -q "versionName='0.4.8'" /tmp/vpn-badging.txt
           echo "APK metadata and runtime integration checks passed."
 
       - name: Promote patched Android source into repository
@@ -188,7 +210,7 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add -A
               if ! git diff --cached --quiet; then
-                git commit -m "Promote verified VPN Control 0.4.7 ARM64 Android sources"
+                git commit -m "Promote verified VPN Control 0.4.8 ARM64 Android sources"
                 git push
               fi
               ;;
@@ -212,6 +234,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: VPN-Control-0.4.7-arm64
+          name: VPN-Control-0.4.8-arm64
           path: ${{ steps.apk.outputs.path }}
           if-no-files-found: error
