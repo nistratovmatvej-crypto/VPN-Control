@@ -1,3 +1,4 @@
+
 name: Build VPN Control APK
 
 on:
@@ -28,10 +29,10 @@ jobs:
       - name: Accept Android licenses
         shell: bash
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager --update
+          yes | sdkmanager --licenses
 
       - name: Extract project
+        shell: bash
         run: |
           mkdir -p project
           unzip -o vpn-control.zip -d project
@@ -41,18 +42,42 @@ jobs:
         shell: bash
         run: |
           GRADLE_FILE=$(find project -name gradlew -type f | head -n 1)
+
           if [ -z "$GRADLE_FILE" ]; then
-            echo "Gradle wrapper not found!"
+            echo "ERROR: Gradle wrapper not found!"
             exit 1
           fi
+
           PROJECT_DIR=$(dirname "$GRADLE_FILE")
+
           echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
           chmod +x "$GRADLE_FILE"
+
+      - name: Update Gradle Wrapper
+        working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
+        run: |
+          PROPERTIES="gradle/wrapper/gradle-wrapper.properties"
+
+          if [ ! -f "$PROPERTIES" ]; then
+            echo "ERROR: gradle-wrapper.properties not found!"
+            exit 1
+          fi
+
+          sed -i \
+            's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip|' \
+            "$PROPERTIES"
+
+          sed -i '/^distributionSha256Sum=/d' "$PROPERTIES"
+
+          cat "$PROPERTIES"
 
       - name: Build APK
         working-directory: ${{ steps.project.outputs.dir }}
+        shell: bash
         run: |
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
