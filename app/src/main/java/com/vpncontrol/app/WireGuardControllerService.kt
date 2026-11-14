@@ -18,6 +18,7 @@ class WireGuardControllerService : Service() {
     companion object {
         const val ACTION_UP = "com.vpncontrol.app.AWG_UP"
         const val ACTION_DOWN = "com.vpncontrol.app.AWG_DOWN"
+        const val ACTION_RECONNECT = "com.vpncontrol.app.AWG_RECONNECT"
         const val ACTION_AUTO_SELECT = "com.vpncontrol.app.AWG_AUTO_SELECT"
         @Volatile private var sharedBackend: GoBackend? = null
         private val tunnel = object : Tunnel {
@@ -57,6 +58,7 @@ class WireGuardControllerService : Service() {
                 val engine = backend()
                 when (intent?.action) {
                     ACTION_UP -> connectActiveProfile(engine)
+                    ACTION_RECONNECT -> reconnectActiveProfile(engine)
                     ACTION_AUTO_SELECT -> autoSelectByHandshake(engine)
                     else -> {
                         tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this, rx, tx) }
@@ -126,6 +128,23 @@ class WireGuardControllerService : Service() {
             .putLong("connectedAt", System.currentTimeMillis()).apply()
         startTrafficSampler()
         notifyResult("VPN подключён", "Туннель AmneziaWG активен")
+    }
+
+    private fun reconnectActiveProfile(engine: GoBackend) {
+        require(File(filesDir, "active.enc").exists()) { "Сначала импортируй VPN-конфигурацию" }
+        val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
+        val wasConnected = prefs.getBoolean("vpnWasStarted", false) || engine.getState(tunnel) == Tunnel.State.UP
+        if (!wasConnected) {
+            connectActiveProfile(engine)
+            return
+        }
+        engine.setState(tunnel, Tunnel.State.DOWN, null)
+        Thread.sleep(350L)
+        engine.setState(tunnel, Tunnel.State.UP, configForActiveProfile())
+        prefs.edit().putBoolean("vpnWasStarted", true)
+            .putLong("connectedAt", System.currentTimeMillis()).apply()
+        startTrafficSampler()
+        notifyResult("Настройки применены", "Маршрутизация приложений и DNS обновлены")
     }
 
     /** Tests each saved profile by establishing the real AWG tunnel and waiting for a fresh handshake. */
