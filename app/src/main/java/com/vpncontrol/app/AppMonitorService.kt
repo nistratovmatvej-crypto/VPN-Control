@@ -3,6 +3,7 @@ package com.vpncontrol.app
 import android.app.*
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
+import android.net.ConnectivityManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -16,6 +17,9 @@ class AppMonitorService : Service() {
     private var lastPackage = ""
     private var lastDesiredState: Boolean? = null
     private var lastDnsNotice = 0L
+    @Volatile private var dnsReady = false
+    @Volatile private var dnsCheckRunning = false
+    private var lastDnsCheck = 0L
     private val tick = object : Runnable {
         override fun run() {
             WireGuardControllerService.tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this@AppMonitorService, rx, tx) }
@@ -25,16 +29,34 @@ class AppMonitorService : Service() {
             if (pkg.isNotBlank()) {
                 prefs.edit().putString("foregroundPackage", pkg).apply()
                 lastPackage = pkg
-                val needsVpn = when (pkg) {
+                val routingMode = prefs.getString("routingMode", "all") ?: "all"
+                val routingPackages = prefs.getStringSet("routingPackages", emptySet()) ?: emptySet()
+                val routeSelection = when (routingMode) {
+                    "include" -> pkg in routingPackages
+                    "exclude" -> pkg !in routingPackages
+                    else -> true
+                }
+                val legacyRule = when (pkg) {
                     "org.telegram.messenger" -> prefs.getBoolean("ruleTelegram", true)
                     "com.google.android.youtube" -> prefs.getBoolean("ruleYoutube", true)
                     "com.anthropic.claude" -> prefs.getBoolean("ruleClaude", false)
-                    else -> false
+                    else -> routeSelection
                 }
-                // Re-evaluate every poll so changing a switch takes effect without reopening the app.
+                val dnsRequired = prefs.getStringSet("dnsRequiredPackages", emptySet()) ?: emptySet()
+                val gateEnabled = prefs.getBoolean("dnsGateEnabled", true)
+                val needsDns = gateEnabled && pkg in dnsRequired
+                if (needsDns) refreshDnsReadiness()
+                val needsVpn = legacyRule && (!needsDns || dnsReady)
                 if (needsVpn != lastDesiredState) {
                     lastDesiredState = needsVpn
                     setVpn(needsVpn)
+                    if (needsDns && !dnsReady) {
+                        val now = System.currentTimeMillis()
+                        if (now - lastDnsNotice > 60_000) {
+                            lastDnsNotice = now
+                            notifyUser("DNS пока недоступен", "VPN не включён для этого приложения. Повторю проверку автоматически.")
+                        }
+                    }
                 }
                 if (pkg == "com.anthropic.claude" && !prefs.getBoolean("ruleClaude", false)) {
                     val now = System.currentTimeMillis()
@@ -54,6 +76,23 @@ class AppMonitorService : Service() {
         handler.post(tick)
     }
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+
+    /** Resolve a real hostname on the active network; DNS-gated apps stay outside the VPN until it works. */
+    private fun refreshDnsReadiness() {
+        val now = System.currentTimeMillis()
+        if (dnsCheckRunning || now - lastDnsCheck < 12_000L) return
+        dnsCheckRunning = true
+        Thread {
+            val ready = try {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val network = cm.activeNetwork
+                network != null && network.getAllByName("example.com").isNotEmpty()
+            } catch (_: Exception) { false }
+            dnsReady = ready
+            lastDnsCheck = System.currentTimeMillis()
+            dnsCheckRunning = false
+        }.start()
+    }
 
     private fun foregroundPackage(): String {
         val manager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
