@@ -21,28 +21,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER=""
-          for candidate in \
-            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-            "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"; do
-            if [ -x "$candidate" ]; then SDKMANAGER="$candidate"; break; fi
-          done
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "$ANDROID_HOME" -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
-          fi
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
           if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found under Android SDK"
-            echo "ANDROID_HOME=$ANDROID_HOME"
-            find "$ANDROID_HOME" -maxdepth 4 -type f | head -n 80
+            echo "ERROR: sdkmanager not found under $SDK_ROOT"
+            find "$SDK_ROOT" -maxdepth 5 -type f | head -n 100 || true
             exit 1
           fi
+          echo "Using SDK manager: $SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" --install "platform-tools" "platforms;android-36" "build-tools;36.0.0"
 
