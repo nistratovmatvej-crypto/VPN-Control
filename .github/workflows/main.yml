@@ -87,8 +87,9 @@ jobs:
           sed -i 's/;prefs.edit().putBoolean("vpnWasStarted",false).apply()}/}/' "$MAIN"
           sed -i 's/prefs.edit().putBoolean("vpnWasStarted", effectiveEnabled).apply()/\/\/ state is committed by WireGuardControllerService/' "$MON"
 
-          # The Android system binds this protected service; keep it exported and permission-guarded.
+          # The library declares the protected VPN service non-exported; match it to avoid a manifest merge conflict.
           sed -i 's|org.amnezia.awg.backend.GoBackend\$VpnService|org.amnezia.awg.backend.AbstractBackend\$VpnService|' "$MANIFEST"
+          sed -i '/org.amnezia.awg.backend.AbstractBackend\$VpnService/s/android:exported="true"/android:exported="false"/' "$MANIFEST"
           if ! grep -q 'xmlns:tools=' "$MANIFEST"; then
             sed -i 's|<manifest |<manifest xmlns:tools="http://schemas.android.com/tools" |' "$MANIFEST"
           fi
