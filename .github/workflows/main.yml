@@ -76,7 +76,7 @@ jobs:
           MANIFEST="$(find project -path '*/src/main/AndroidManifest.xml' -print -quit)"
           test -n "$MANIFEST"
           APP_DIR="$(dirname "$MANIFEST")"
-          sed -i 's|org.amnezia.awg.backend.GoBackend\\$VpnService|org.amnezia.awg.backend.AbstractBackend\\$VpnService|' "$MANIFEST"
+          sed -i 's|org.amnezia.awg.backend.GoBackend\$VpnService|org.amnezia.awg.backend.AbstractBackend\$VpnService|' "$MANIFEST"
           mkdir -p "$APP_DIR/res/drawable"
           cat > "$APP_DIR/res/drawable/ic_vpn_control.xml" <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android"
