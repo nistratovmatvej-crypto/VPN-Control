@@ -86,8 +86,37 @@ class WireGuardControllerService : Service() {
     /** Applies the user's per-app VPN rules for the live tunnel. Probe attempts intentionally use
      * the raw full-tunnel profile so this app can generate traffic and trigger a peer handshake. */
     private fun configForActiveProfile(): Config {
-        val original = ConfigStore.decrypt(File(filesDir, "active.enc").readBytes())
-        return ByteArrayInputStream(original).use { Config.parse(it) }
+        val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
+        var raw = ConfigStore.decrypt(File(filesDir, "active.enc").readBytes()).toString(Charsets.UTF_8)
+        // Strip stale split-tunnel directives before applying the current user selection.
+        raw = raw.replace(Regex("(?im)^(IncludedApplications|ExcludedApplications)\\s*=.*(?:\\r?\\n)?"), "")
+        val mode = prefs.getString("routingMode", "all") ?: "all"
+        val selected = prefs.getStringSet("routingPackages", emptySet())?.sorted().orEmpty()
+        require(mode != "include" || selected.isNotEmpty()) { "Выбери приложения для режима «Только выбранные через VPN»" }
+        val directive = when (mode) {
+            "include" -> "IncludedApplications = ${selected.joinToString(", ")}"
+            "exclude" -> if (selected.isNotEmpty()) "ExcludedApplications = ${selected.joinToString(", ")}" else ""
+            else -> ""
+        }
+        val dns = when (prefs.getString("dnsMode", "profile")) {
+            "cloudflare" -> "1.1.1.1, 1.0.0.1"
+            "quad9" -> "9.9.9.9, 149.112.112.112"
+            "google" -> "8.8.8.8, 8.8.4.4"
+            else -> ""
+        }
+        if (dns.isNotBlank()) {
+            if (Regex("(?im)^DNS\\s*=").containsMatchIn(raw)) {
+                raw = raw.replace(Regex("(?im)^DNS\\s*=.*$"), "DNS = $dns")
+            } else {
+                val peer = Regex("(?im)^\\[Peer\\]").find(raw)?.range?.first ?: raw.length
+                raw = raw.substring(0, peer) + "DNS = $dns\\n" + raw.substring(peer)
+            }
+        }
+        if (directive.isNotBlank()) {
+            val peer = Regex("(?im)^\\[Peer\\]").find(raw)?.range?.first ?: raw.length
+            raw = raw.substring(0, peer) + directive + "\\n" + raw.substring(peer)
+        }
+        return ByteArrayInputStream(raw.toByteArray(Charsets.UTF_8)).use { Config.parse(it) }
     }
 
     private fun connectActiveProfile(engine: GoBackend) {
