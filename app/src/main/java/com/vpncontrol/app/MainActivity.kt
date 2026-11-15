@@ -97,7 +97,7 @@ class MainActivity : Activity() {
         info.addView(text(if(connected)"●  VPN ВКЛЮЧЁН" else if(pending)"●  ПОДКЛЮЧЕНИЕ…" else if(disconnecting)"●  ОТКЛЮЧЕНИЕ…" else "●  VPN ВЫКЛЮЧЕН",19f,if(connected)green else if(pending || disconnecting)amber else muted,true))
         info.addView(text(prefs.getString("profileName","VPN-профиль") ?: "VPN-профиль",14f,white,true).apply { setPadding(0,dp(9),0,dp(5)) })
         info.addView(TextView(this).apply { text="Сменить профиль  ⌄"; textSize=13f; setTextColor(0xFFC5B6E8.toInt()); setOnClickListener{showProfileChooser()} })
-        info.addView(text(if(connected)"Защищённый туннель активен" else if(pending)"Ожидание запуска туннеля" else if(disconnecting)"Останавливаю туннель…" else lastError?.take(64) ?: "Трафик идёт напрямую · нажми питание",11f,if(lastError!=null && !pending && !disconnecting)0xFFFF9B8F.toInt() else muted))
+        info.addView(text(if(connected)"Защищённый туннель активен" else if(pending)"Ожидание запуска туннеля" else if(disconnecting)"Останавливаю туннель…" else lastError?.take(64) ?: "Трафик идёт напрямую · нажми питание",11f,if(connected)green else if(lastError!=null && !pending && !disconnecting)0xFFFF9B8F.toInt() else muted))
         hero.addView(info,LinearLayout.LayoutParams(0,-2,1f)); addCard(hero)
         val counters=WireGuardControllerService.tunnelCounters()
         val rx=counters?.first ?: TrafficStatsTracker.value(this,"total_rx")
