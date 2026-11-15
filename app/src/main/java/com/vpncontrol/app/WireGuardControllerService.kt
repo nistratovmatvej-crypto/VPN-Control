@@ -33,6 +33,8 @@ class WireGuardControllerService : Service() {
         }
 
         /** Actual peer counters supplied by the native AmneziaWG backend. */
+        fun isTunnelUp(): Boolean = try { sharedBackend?.getState(tunnel) == Tunnel.State.UP } catch (_: Exception) { false }
+
         fun tunnelCounters(): Pair<Long, Long>? {
             return try {
                 val b = sharedBackend ?: return null
