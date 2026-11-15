@@ -58,7 +58,7 @@ class WireGuardControllerService : Service() {
         startForeground(3102, notification("VPNcontrol", "Применяем настройки туннеля…"))
         val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
         if (intent?.action == ACTION_UP || intent?.action == ACTION_RECONNECT) {
-            prefs.edit().putBoolean("vpnConnecting", true).remove("vpnLastError").apply()
+            prefs.edit().putBoolean("vpnConnecting", true).putBoolean("vpnDisconnecting", false).remove("vpnLastError").apply()
         }
         if (intent?.action == ACTION_DOWN) prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", true).apply()
         operations.execute {
@@ -152,8 +152,9 @@ class WireGuardControllerService : Service() {
         engine.setState(tunnel, Tunnel.State.DOWN, null)
         Thread.sleep(350L)
         engine.setState(tunnel, Tunnel.State.UP, configForActiveProfile())
-        prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnWasStarted", true)
-            .putLong("connectedAt", System.currentTimeMillis()).apply()
+        check(engine.getState(tunnel) == Tunnel.State.UP) { "AmneziaWG не подтвердил переключение профиля" }
+        prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).putBoolean("vpnWasStarted", true)
+            .remove("vpnLastError").putLong("connectedAt", System.currentTimeMillis()).apply()
         startTrafficSampler()
         notifyResult("Настройки применены", "Маршрутизация приложений и DNS обновлены")
     }
