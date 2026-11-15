@@ -218,14 +218,37 @@ class MainActivity : Activity() {
     private fun renderSettings() {
         section("СОХРАНЁННЫЕ СЕРВЕРЫ")
         val profiles = ProfileStore.all(this).sortedByDescending { it.favorite }
-        if (profiles.isEmpty()) { val empty=card(); empty.addView(text("Пока нет серверов",16f,white,true)); empty.addView(text("Импортируй конфигурацию AmneziaWG или WireGuard. Параметры обфускации сохраняются без изменений.",12f,muted)); addCard(empty) }
-        profiles.forEach { profile ->
+        val profileSearchCard = card()
+        profileSearchCard.addView(text("ПОИСК ПО СЕРВЕРАМ", 10f, amber, true))
+        val profileSearch = EditText(this).apply {
+            hint = "⌕  Страна или название сервера…"
+            textSize = 14f; setSingleLine(true); setTextColor(white); setHintTextColor(muted)
+            setPadding(dp(13), dp(11), dp(13), dp(11))
+            background = shape(panel2, 14, 0xFF51415F.toInt())
+        }
+        profileSearchCard.addView(profileSearch)
+        val profileRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        profileSearchCard.addView(profileRows)
+        addCard(profileSearchCard)
+        fun renderProfiles(query: String) {
+            profileRows.removeAllViews()
+            val filtered = profiles.filter { it.name.contains(query, true) || it.id.contains(query, true) }
+            profileRows.addView(text("${filtered.size} серверов найдено", 11f, muted))
+            if (filtered.isEmpty()) profileRows.addView(text(if (profiles.isEmpty()) "Пока нет серверов. Добавь профиль MyControl или импортируй конфигурацию." else "Ничего не найдено", 13f, muted))
+            filtered.forEach { profile ->
             val row=card(); val active=ProfileStore.activeId(this)==profile.id
             row.addView(text((if(active) "●  " else "○  ")+profile.name,16f,if(active)amber else white,true))
             row.addView(text((if(profile.favorite) "★ Избранное" else "☆ Не в избранном")+if(active) "  ·  Активный" else "",11f,muted))
             row.addView(gap(6)); row.addView(button(if(active) "АКТИВНЫЙ ПРОФИЛЬ" else "СДЕЛАТЬ АКТИВНЫМ",!active){if(prefs.getBoolean("vpnWasStarted",false)){Toast.makeText(this,"Сначала отключи VPN, затем переключи сервер",Toast.LENGTH_LONG).show()}else try{ProfileStore.activate(this,profile.id);render()}catch(e:Exception){Toast.makeText(this,e.message,Toast.LENGTH_LONG).show()}})
-            row.addView(gap(6)); val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(button(if(profile.favorite) "★" else "☆"){ProfileStore.toggleFavorite(this@MainActivity,profile.id);render()},LinearLayout.LayoutParams(0,-2,1f));addView(button("Удалить"){if(prefs.getBoolean("vpnWasStarted",false)&&active){Toast.makeText(this@MainActivity,"Сначала отключи VPN",Toast.LENGTH_LONG).show()}else{ProfileStore.remove(this@MainActivity,profile.id);render()}},LinearLayout.LayoutParams(0,-2,1f))};row.addView(actions);addCard(row)
+            row.addView(gap(6)); val actions=LinearLayout(this).apply{orientation=LinearLayout.HORIZONTAL;addView(button(if(profile.favorite) "★" else "☆"){ProfileStore.toggleFavorite(this@MainActivity,profile.id);render()},LinearLayout.LayoutParams(0,-2,1f));addView(button("Удалить"){if(prefs.getBoolean("vpnWasStarted",false)&&active){Toast.makeText(this@MainActivity,"Сначала отключи VPN",Toast.LENGTH_LONG).show()}else{ProfileStore.remove(this@MainActivity,profile.id);render()}},LinearLayout.LayoutParams(0,-2,1f))};row.addView(actions);profileRows.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            }
         }
+        renderProfiles("")
+        profileSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) { renderProfiles(s?.toString().orEmpty()) }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
         val controls=card();controls.addView(button("＋  ИМПОРТИРОВАТЬ .CONF / AWG",true){openConfigPicker()});controls.addView(gap(7));controls.addView(button("✦  АВТОВЫБОР ЛУЧШЕГО СЕРВЕРА",false){selectBestServer()});addCard(controls)
         section("ПРОТОКОЛЫ")
         val protocols = card()
@@ -236,7 +259,7 @@ class MainActivity : Activity() {
         section("KILL SWITCH")
         val alwaysOn = Settings.Secure.getString(contentResolver,"always_on_vpn_app") == packageName
         val lockdown = try { Settings.Secure.getInt(contentResolver,"always_on_vpn_lockdown",0) == 1 } catch (_:Exception) { false }
-        val k=card();k.addView(line("Always-on VPN",if(alwaysOn)"Включён" else "Выключен",if(alwaysOn)green else amber));k.addView(line("Блокировка без VPN",if(lockdown)"Включена" else "Выключена",if(lockdown)green else amber));k.addView(gap(7));k.addView(button("ОТКРЫТЬ НАСТРОЙКИ KILL SWITCH",true){startActivity(Intent(Settings.ACTION_VPN_SETTINGS))});k.addView(text(if(lockdown)"Системный lockdown обнаружен. Android блокирует трафик вне VPN." else "Для включения выбери VPN Control в системных настройках, включи Always-on VPN и затем «Блокировать подключения без VPN». Android не разрешает обычному приложению включать lockdown без действия пользователя.",11f,amber));k.addView(text("Важно: Kill Switch конфликтует с раздельным туннелированием. Приложения, не включённые в VPN-список, могут потерять интернет. Для режима «остальные приложения напрямую» системную блокировку лучше не включать.",11f,muted).apply{setPadding(0,dp(9),0,0)});addCard(k)
+        val k=card();k.addView(line("Always-on VPN",if(alwaysOn)"Включён" else "Выключен",if(alwaysOn)green else amber));k.addView(line("Блокировка без VPN",if(lockdown)"Включена" else "Выключена",if(lockdown)green else amber));k.addView(gap(7));k.addView(button("ОТКРЫТЬ НАСТРОЙКИ KILL SWITCH",true){startActivity(Intent(Settings.ACTION_VPN_SETTINGS))});k.addView(text(if(lockdown)"Системный lockdown обнаружен. Android блокирует трафик вне VPN." else "Для включения выбери MyControl в системных настройках, включи Always-on VPN и затем «Блокировать подключения без VPN». Android не разрешает обычному приложению включать lockdown без действия пользователя.",11f,amber));k.addView(text("Важно: Kill Switch конфликтует с раздельным туннелированием. Приложения, не включённые в VPN-список, могут потерять интернет. Для режима «остальные приложения напрямую» системную блокировку лучше не включать.",11f,muted).apply{setPadding(0,dp(9),0,0)});addCard(k)
         section("DNS")
         val d=card();d.addView(line("Режим Private DNS",Settings.Global.getString(contentResolver,"private_dns_mode")?:"неизвестно"));d.addView(line("Имя DNS",Settings.Global.getString(contentResolver,"private_dns_specifier")?:"Автоматически"));d.addView(button("ОТКРЫТЬ НАСТРОЙКИ PRIVATE DNS",false){openPrivateDnsSettings()});addCard(d)
         section("РЕЗЕРВНЫЕ КОПИИ")
@@ -244,7 +267,7 @@ class MainActivity : Activity() {
         section("РАЗРЕШЕНИЯ")
         val a=card();a.addView(line("Статистика приложений",if(hasUsageAccess())"Разрешена" else "Не разрешена",if(hasUsageAccess())green else amber));a.addView(button("УПРАВЛЯТЬ РАЗРЕШЕНИЕМ",false){startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))});addCard(a)
         section("О ПРИЛОЖЕНИИ")
-        val about=card();about.addView(text("VPN Control 0.5.0 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
+        val about=card();about.addView(text("MyControl 0.6.0 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
     }
 
     private fun selectBestServer() {
