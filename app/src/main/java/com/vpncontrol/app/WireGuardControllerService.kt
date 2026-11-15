@@ -60,7 +60,7 @@ class WireGuardControllerService : Service() {
         if (intent?.action == ACTION_UP || intent?.action == ACTION_RECONNECT) {
             prefs.edit().putBoolean("vpnConnecting", true).remove("vpnLastError").apply()
         }
-        if (intent?.action == ACTION_DOWN) prefs.edit().putBoolean("vpnConnecting", false).apply()
+        if (intent?.action == ACTION_DOWN) prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", true).apply()
         operations.execute {
             try {
                 val engine = backend()
@@ -72,14 +72,14 @@ class WireGuardControllerService : Service() {
                         tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this, rx, tx) }
                         engine.setState(tunnel, Tunnel.State.DOWN, null)
                         getSharedPreferences("vpncontrol", MODE_PRIVATE).edit()
-                            .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).remove("connectedAt").apply()
+                             .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).remove("connectedAt").apply()
                         stopService(Intent(this, TrafficStatsService::class.java))
                         notifyResult("VPN отключён", "Туннель остановлен")
                     }
                 }
             } catch (e: Exception) {
                 try { backend().setState(tunnel, Tunnel.State.DOWN, null) } catch (_: Exception) { }
-                prefs.edit().putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false)
+                prefs.edit() .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false)
                     .putString("vpnLastError", e.message ?: "Не удалось применить конфигурацию")
                     .remove("connectedAt").apply()
                 stopService(Intent(this, TrafficStatsService::class.java))
@@ -135,7 +135,7 @@ class WireGuardControllerService : Service() {
         val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
         engine.setState(tunnel, Tunnel.State.UP, configForActiveProfile())
         check(engine.getState(tunnel) == Tunnel.State.UP) { "AmneziaWG не подтвердил запуск туннеля" }
-        prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnWasStarted", true)
+        prefs.edit() .putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).putBoolean("vpnWasStarted", true)
             .remove("vpnLastError").putLong("connectedAt", System.currentTimeMillis()).apply()
         startTrafficSampler()
         notifyResult("VPN подключён", "Туннель AmneziaWG активен")
