@@ -23,6 +23,7 @@ import java.io.File
 import java.net.InetAddress
 import java.text.DecimalFormat
 
+// VPN status is read from the live AmneziaWG backend, not a stale UI toggle.
 class MainActivity : Activity() {
     private val bg = 0xFF111015.toInt(); private val panel = 0xFF1D1B24.toInt(); private val panel2 = 0xFF292631.toInt()
     private val white = 0xFFF6F2FA.toInt(); private val muted = 0xFFAAA3B5.toInt(); private val amber = 0xFF9B6DFF.toInt()
