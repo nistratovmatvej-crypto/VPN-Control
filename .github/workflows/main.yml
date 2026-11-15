@@ -193,7 +193,7 @@ jobs:
           grep -Fq 'NoopTunnelActionHandler()' "$WG"
           grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
           ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
-          grep -Fq '0.5.0' "$MAIN"
+          grep -Fq '0.6.0' "$MAIN"
           APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
@@ -208,7 +208,7 @@ jobs:
           echo "APK signature and ARM64 native runtime verified."
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
-          grep -q "versionName='0.5.0'" /tmp/vpn-badging.txt
+          grep -q "versionName='0.6.0'" /tmp/vpn-badging.txt
           echo "APK metadata and runtime integration checks passed."
 
       - name: Promote patched Android source into repository
@@ -225,7 +225,7 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add -A
               if ! git diff --cached --quiet; then
-                git commit -m "Promote verified VPN Control 0.5.0 ARM64 Android sources"
+                git commit -m "Promote verified MyControl 0.6.0 ARM64 Android sources"
                 git push
               fi
               ;;
@@ -259,8 +259,8 @@ jobs:
       - name: Publish direct APK download on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.0
-          name: VPN Control 0.5.0
+          tag_name: v0.6.0
+          name: MyControl 0.6.0
           body: |
             Готовый установочный APK для Android (ARM64).
 
