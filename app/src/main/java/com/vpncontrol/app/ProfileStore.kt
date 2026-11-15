@@ -27,34 +27,27 @@ object ProfileStore {
     }
     fun all(context: Context): List<VpnProfile> = read(context)
 
-    /** Installs APK-bundled profiles once, encrypting each with the device Keystore key. */
+    /** Installs bundled profiles once; private configs are injected by the build environment. */
     fun installBuiltIns(context: Context) {
         val bundled = listOf(
-            Triple("builtin-haiku", "Haiku", "profiles/Haiku.conf"),
-            Triple("builtin-tanka", "Tanka", "profiles/Tanka.conf"),
-            Triple("builtin-sonnet", "Sonnet", "profiles/Sonnet.conf")
+            "builtin-haiku" to ("Haiku" to BuildConfig.BUILTIN_HAIKU_CONFIG),
+            "builtin-tanka" to ("Tanka" to BuildConfig.BUILTIN_TANKA_CONFIG),
+            "builtin-sonnet" to ("Sonnet" to BuildConfig.BUILTIN_SONNET_CONFIG)
         )
         val list = read(context)
         var changed = false
-        bundled.forEach { (id, name, assetPath) ->
-            if (list.any { it.id == id }) return@forEach
-            val plain = try {
-                context.assets.open(assetPath).use { it.readBytes() }
-            } catch (_: Exception) {
-                return@forEach
-            }
+        bundled.forEach { (id, pair) ->
+            val (name, encoded) = pair
+            if (encoded.isBlank() || list.any { it.id == id }) return@forEach
+            val plain = try { android.util.Base64.decode(encoded, android.util.Base64.DEFAULT) } catch (_: Exception) { return@forEach }
             val config = plain.toString(Charsets.UTF_8)
-            if (!config.contains("[Interface]") || !config.contains("[Peer]") ||
-                !config.contains("PrivateKey") || !config.contains("PublicKey") ||
-                !config.contains("Endpoint")) return@forEach
+            if (!config.contains("[Interface]") || !config.contains("[Peer]")) return@forEach
             File(dir(context), "$id.enc").writeBytes(ConfigStore.encrypt(plain))
             list.add(VpnProfile(id, name, name == "Haiku"))
             changed = true
         }
         if (changed) write(context, list)
-        if (activeId(context).isBlank() && list.any { it.id == "builtin-haiku" }) {
-            activate(context, "builtin-haiku")
-        }
+        if (activeId(context).isBlank() && list.any { it.id == "builtin-haiku" }) activate(context, "builtin-haiku")
     }
     fun activeId(context: Context): String = context.getSharedPreferences("vpncontrol", Context.MODE_PRIVATE).getString("activeProfileId", "") ?: ""
     fun add(context: Context, name: String, plainConfig: ByteArray): VpnProfile {
