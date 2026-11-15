@@ -3,6 +3,8 @@ name: Build VPN Control APK
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +13,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WARP_HAIKU_CONFIG_B64: ${{ secrets.WARP_HAIKU_CONFIG_B64 }}
+      WARP_TANKA_CONFIG_B64: ${{ secrets.WARP_TANKA_CONFIG_B64 }}
+      WARP_SONNET_CONFIG_B64: ${{ secrets.WARP_SONNET_CONFIG_B64 }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -103,12 +109,11 @@ jobs:
           mkdir -p "$APP_DIR/res/drawable"
           cat > "$APP_DIR/res/drawable/ic_vpn_control.xml" <<'EOF'
           <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-            <path android:fillColor="#101827" android:pathData="M0,0h108v108h-108z"/>
-            <path android:fillColor="#FFB45C" android:pathData="M54,7 L96,22 L96,49 C96,74 79,92 54,103 C29,92 12,74 12,49 L12,22 Z"/>
-            <path android:fillColor="#172338" android:pathData="M54,18 L85,29 L85,49 C85,68 72,82 54,91 C36,82 23,68 23,49 L23,29 Z"/>
-            <path android:fillColor="#5BD6A0" android:pathData="M31,47 L39,47 L39,61 L31,61 Z M69,47 L77,47 L77,61 L69,61 Z"/>
-            <path android:fillColor="#F4F6FC" android:pathData="M42,39 L50,39 L50,69 L42,69 Z M58,39 L66,39 L66,69 L58,69 Z M42,35 L66,35 L66,43 L42,43 Z M42,65 L66,65 L66,73 L42,73 Z"/>
-            <path android:fillColor="#5BD6A0" android:pathData="M47,47 L61,47 L61,61 L47,61 Z"/>
+            <path android:fillColor="#111015" android:pathData="M0,0h108v108h-108z"/>
+            <path android:fillColor="#9B6DFF" android:pathData="M54,7 L94,22 L94,49 C94,74 78,92 54,102 C30,92 14,74 14,49 L14,22 Z"/>
+            <path android:fillColor="#17131F" android:pathData="M54,17 L84,28 L84,49 C84,67 72,81 54,91 C36,81 24,67 24,49 L24,28 Z"/>
+            <path android:fillColor="#B18AFF" android:pathData="M59,25 L39,57 L52,57 L46,82 L70,47 L56,47 Z"/>
+            <path android:fillColor="#F6F2FA" android:pathData="M54,11 L90,24 L90,30 L54,18 L18,30 L18,24 Z"/>
           </vector>
           EOF
           if grep -q 'android:icon=' "$MANIFEST"; then
@@ -154,6 +159,24 @@ jobs:
           keytool -list -keystore "$KEY" -storepass vpncontrol-debug-only -alias vpncontrol >/dev/null
           echo "Stable signing key restored."
 
+      - name: Validate built-in VPN profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WARP_HAIKU_CONFIG_B64"
+          test -n "$WARP_TANKA_CONFIG_B64"
+          test -n "$WARP_SONNET_CONFIG_B64"
+          for value in "$WARP_HAIKU_CONFIG_B64" "$WARP_TANKA_CONFIG_B64" "$WARP_SONNET_CONFIG_B64"; do
+            decoded="$(printf '%s' "$value" | base64 --decode)"
+            grep -Fq '[Interface]' <<< "$decoded"
+            grep -Fq '[Peer]' <<< "$decoded"
+            grep -Eq '^PrivateKey[[:space:]]*=' <<< "$decoded"
+            grep -Eq '^PublicKey[[:space:]]*=' <<< "$decoded"
+            grep -Eq '^Endpoint[[:space:]]*=' <<< "$decoded"
+            unset decoded
+          done
+          echo "Three embedded VPN profiles validated."
+
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon --stacktrace assembleDebug
@@ -193,7 +216,7 @@ jobs:
           grep -Fq 'NoopTunnelActionHandler()' "$WG"
           grep -Fq 'lastHandshakeEpoch(engine)' "$WG"
           ! grep -Fq 'putBoolean("vpnWasStarted", effectiveEnabled)' "$(find "$SRC_ROOT" -name AppMonitorService.kt -print -quit)"
-          grep -Fq '0.5.0' "$MAIN"
+          grep -Fq '0.6.0' "$MAIN"
           APK="$(find "$SRC_ROOT" -type f -path '*/build/outputs/apk/debug/*.apk' -print -quit)"
           AAPT="$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -type f -name aapt -print -quit)"
           test -n "$APK" && test -n "$AAPT"
@@ -208,7 +231,7 @@ jobs:
           echo "APK signature and ARM64 native runtime verified."
           grep -q "^launchable-activity:" /tmp/vpn-badging.txt
           grep -q "^application-icon-" /tmp/vpn-badging.txt
-          grep -q "versionName='0.5.0'" /tmp/vpn-badging.txt
+          grep -q "versionName='0.6.0'" /tmp/vpn-badging.txt
           echo "APK metadata and runtime integration checks passed."
 
       - name: Promote patched Android source into repository
@@ -225,7 +248,7 @@ jobs:
               git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
               git add -A
               if ! git diff --cached --quiet; then
-                git commit -m "Promote verified VPN Control 0.5.0 ARM64 Android sources"
+                git commit -m "Promote verified VPNcontrol 0.6.0 ARM64 Android sources"
                 git push
               fi
               ;;
@@ -259,8 +282,8 @@ jobs:
       - name: Publish direct APK download on GitHub
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.5.0
-          name: VPN Control 0.5.0
+          tag_name: v0.6.0
+          name: VPNcontrol 0.6.0
           body: |
             Готовый установочный APK для Android (ARM64).
 

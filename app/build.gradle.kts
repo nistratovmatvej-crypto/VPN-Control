@@ -12,8 +12,11 @@ android {
         minSdk = 26
         targetSdk = 34
         ndk { abiFilters += listOf("arm64-v8a") }
-        versionCode = 13
-        versionName = "0.5.0"
+        versionCode = 14
+        versionName = "0.6.0"
+        buildConfigField("String", "BUILTIN_HAIKU_CONFIG", "\"" + (System.getenv("WARP_HAIKU_CONFIG_B64") ?: "") + "\"")
+        buildConfigField("String", "BUILTIN_TANKA_CONFIG", "\"" + (System.getenv("WARP_TANKA_CONFIG_B64") ?: "") + "\"")
+        buildConfigField("String", "BUILTIN_SONNET_CONFIG", "\"" + (System.getenv("WARP_SONNET_CONFIG_B64") ?: "") + "\"")
     }
 
     signingConfigs {
@@ -32,6 +35,8 @@ android {
             signingConfig = signingConfigs.getByName("stableDebug")
         }
     }
+
+    buildFeatures { buildConfig = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

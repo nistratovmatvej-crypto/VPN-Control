@@ -21,6 +21,7 @@ class WireGuardControllerService : Service() {
         const val ACTION_RECONNECT = "com.vpncontrol.app.AWG_RECONNECT"
         const val ACTION_AUTO_SELECT = "com.vpncontrol.app.AWG_AUTO_SELECT"
         @Volatile private var sharedBackend: GoBackend? = null
+        private val operations = java.util.concurrent.Executors.newSingleThreadExecutor()
         private val tunnel = object : Tunnel {
             override fun getName(): String = "VPNControl"
             override fun onStateChange(newState: Tunnel.State) { }
@@ -33,6 +34,8 @@ class WireGuardControllerService : Service() {
         }
 
         /** Actual peer counters supplied by the native AmneziaWG backend. */
+        fun isTunnelUp(context: android.content.Context): Boolean = try { contextBackend(context.applicationContext).getState(tunnel) == Tunnel.State.UP } catch (_: Exception) { false }
+
         fun tunnelCounters(): Pair<Long, Long>? {
             return try {
                 val b = sharedBackend ?: return null
@@ -52,8 +55,13 @@ class WireGuardControllerService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         createChannel()
-        startForeground(3102, notification("VPN Control", "Применяем AmneziaWG…"))
-        Thread {
+        startForeground(3102, notification("VPNcontrol", "Применяем настройки туннеля…"))
+        val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
+        if (intent?.action == ACTION_UP || intent?.action == ACTION_RECONNECT) {
+            prefs.edit().putBoolean("vpnConnecting", true).putBoolean("vpnDisconnecting", false).remove("vpnLastError").apply()
+        }
+        if (intent?.action == ACTION_DOWN) prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", true).apply()
+        operations.execute {
             try {
                 val engine = backend()
                 when (intent?.action) {
@@ -64,18 +72,20 @@ class WireGuardControllerService : Service() {
                         tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this, rx, tx) }
                         engine.setState(tunnel, Tunnel.State.DOWN, null)
                         getSharedPreferences("vpncontrol", MODE_PRIVATE).edit()
-                            .putBoolean("vpnWasStarted", false).remove("connectedAt").apply()
+                             .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).remove("connectedAt").apply()
                         stopService(Intent(this, TrafficStatsService::class.java))
                         notifyResult("VPN отключён", "Туннель остановлен")
                     }
                 }
             } catch (e: Exception) {
-                getSharedPreferences("vpncontrol", MODE_PRIVATE).edit()
-                    .putBoolean("vpnWasStarted", false).remove("connectedAt").apply()
+                try { backend().setState(tunnel, Tunnel.State.DOWN, null) } catch (_: Exception) { }
+                prefs.edit() .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false)
+                    .putString("vpnLastError", e.message ?: "Не удалось применить конфигурацию")
+                    .remove("connectedAt").apply()
                 stopService(Intent(this, TrafficStatsService::class.java))
                 notifyResult("Ошибка VPN", e.message ?: "Не удалось применить конфигурацию")
             } finally { stopSelf(startId) }
-        }.start()
+        }
         return START_NOT_STICKY
     }
 
@@ -124,8 +134,9 @@ class WireGuardControllerService : Service() {
     private fun connectActiveProfile(engine: GoBackend) {
         val prefs = getSharedPreferences("vpncontrol", MODE_PRIVATE)
         engine.setState(tunnel, Tunnel.State.UP, configForActiveProfile())
-        prefs.edit().putBoolean("vpnWasStarted", true)
-            .putLong("connectedAt", System.currentTimeMillis()).apply()
+        check(engine.getState(tunnel) == Tunnel.State.UP) { "AmneziaWG не подтвердил запуск туннеля" }
+        prefs.edit() .putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).putBoolean("vpnWasStarted", true)
+            .remove("vpnLastError").putLong("connectedAt", System.currentTimeMillis()).apply()
         startTrafficSampler()
         notifyResult("VPN подключён", "Туннель AmneziaWG активен")
     }
@@ -141,8 +152,9 @@ class WireGuardControllerService : Service() {
         engine.setState(tunnel, Tunnel.State.DOWN, null)
         Thread.sleep(350L)
         engine.setState(tunnel, Tunnel.State.UP, configForActiveProfile())
-        prefs.edit().putBoolean("vpnWasStarted", true)
-            .putLong("connectedAt", System.currentTimeMillis()).apply()
+        check(engine.getState(tunnel) == Tunnel.State.UP) { "AmneziaWG не подтвердил переключение профиля" }
+        prefs.edit().putBoolean("vpnConnecting", false).putBoolean("vpnDisconnecting", false).putBoolean("vpnWasStarted", true)
+            .remove("vpnLastError").putLong("connectedAt", System.currentTimeMillis()).apply()
         startTrafficSampler()
         notifyResult("Настройки применены", "Маршрутизация приложений и DNS обновлены")
     }
