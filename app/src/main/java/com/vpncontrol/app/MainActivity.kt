@@ -87,7 +87,7 @@ class MainActivity : Activity() {
         lastRenderedTunnelState=connected
         lastRenderedPendingState=pending
         val hero=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(18),dp(20),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF302342.toInt(),0xFF211B2E.toInt(),panel)).apply { cornerRadius=dp(26).toFloat(); setStroke(dp(1),0xFF594078.toInt()) } }
-        val power=TextView(this).apply { text=if(connected)"✓" else if(pending)"…" else "⏻"; textSize=43f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF211A30.toInt()); setStroke(dp(3),if(connected)green else blue) }; setOnClickListener { if(connected)stopVpn() else requestVpnStart(); handler.postDelayed({render()},350) } }
+        val power=TextView(this).apply { text=if(connected)"✓" else if(pending)"…" else "⏻"; textSize=43f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF211A30.toInt()); setStroke(dp(3),if(connected)green else blue) }; setOnClickListener { if(connected)stopVpn() else if(!pending)requestVpnStart(); handler.postDelayed({render()},350) } }
         hero.addView(power,LinearLayout.LayoutParams(dp(118),dp(118)).apply { rightMargin=dp(18) })
         val info=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
         info.addView(text(if(connected)"●  VPN ВКЛЮЧЁН" else if(pending)"●  ПОДКЛЮЧЕНИЕ…" else "●  VPN ВЫКЛЮЧЕН",19f,if(connected)green else if(pending)amber else muted,true))
@@ -109,8 +109,8 @@ class MainActivity : Activity() {
         section("МАРШРУТИЗАЦИЯ")
         val routing=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
         listOf(Triple("◎","Напрямую","Без VPN"),Triple("ϟ","Через VPN","Весь трафик через VPN")).forEachIndexed { index,item ->
-            val selected=(prefs.getString("routingMode","all") ?: "all")=="all" && index==1
-            val tile=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(13),dp(15),dp(10),dp(15)); background=shape(if(selected)0xFF29213A.toInt() else panel,20,if(selected)amber else 0xFF393342.toInt()); setOnClickListener { prefs.edit().putString("routingMode",if(index==0)"exclude" else "all").apply(); applyRoutingChanges(); render() } }
+            val selected=if(index==0)!connected else connected
+            val tile=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(13),dp(15),dp(10),dp(15)); background=shape(if(selected)0xFF29213A.toInt() else panel,20,if(selected)amber else 0xFF393342.toInt()); setOnClickListener { if(index==0){ if(WireGuardControllerService.isTunnelUp(this@MainActivity))stopVpn() } else { if(!WireGuardControllerService.isTunnelUp(this@MainActivity))requestVpnStart() } } }
             tile.addView(text(item.first+"   "+item.second,15f,white,true)); tile.addView(text(item.third,11f,muted))
             routing.addView(tile,LinearLayout.LayoutParams(0,-2,1f).apply { if(index==0)rightMargin=dp(9) })
         }
@@ -378,11 +378,13 @@ class MainActivity : Activity() {
             startActivityForResult(consent, 42)
             return
         }
-        val action = if (prefs.getBoolean("vpnWasStarted", false))
-            WireGuardControllerService.ACTION_RECONNECT
-        else WireGuardControllerService.ACTION_UP
+        val connected = WireGuardControllerService.isTunnelUp(this)
+        if (!connected) {
+            showToast("Настройки сохранены. VPN сейчас выключен.")
+            return
+        }
         try {
-            val intent = Intent(this, WireGuardControllerService::class.java).setAction(action)
+            val intent = Intent(this, WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_RECONNECT)
             if (android.os.Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
             Toast.makeText(this, "Применяю настройки маршрутизации и DNS…", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {

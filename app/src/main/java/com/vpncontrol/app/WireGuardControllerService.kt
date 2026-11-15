@@ -75,7 +75,7 @@ class WireGuardControllerService : Service() {
                 }
             } catch (e: Exception) {
                 getSharedPreferences("vpncontrol", MODE_PRIVATE).edit()
-                    .putBoolean("vpnWasStarted", false).remove("connectedAt").apply()
+                    .putBoolean("vpnWasStarted", false).putBoolean("vpnConnecting", false).remove("connectedAt").apply()
                 stopService(Intent(this, TrafficStatsService::class.java))
                 notifyResult("Ошибка VPN", e.message ?: "Не удалось применить конфигурацию")
             } finally { stopSelf(startId) }
