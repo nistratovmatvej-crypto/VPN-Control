@@ -17,7 +17,7 @@
     <application android:icon="@drawable/ic_vpn_control"
         android:name=".VpnControlApp"
         android:allowBackup="false"
-        android:label="MyControl"
+        android:label="VPNcontrol"
         android:theme="@style/AppTheme"
         android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
