@@ -13,6 +13,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      WARP_HAIKU_CONFIG_B64: ${{ secrets.WARP_HAIKU_CONFIG_B64 }}
+      WARP_TANKA_CONFIG_B64: ${{ secrets.WARP_TANKA_CONFIG_B64 }}
+      WARP_SONNET_CONFIG_B64: ${{ secrets.WARP_SONNET_CONFIG_B64 }}
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
