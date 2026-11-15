@@ -9,6 +9,7 @@ import org.amnezia.awg.backend.GoBackend
 class VpnControlApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        try { ProfileStore.installBuiltIns(this) } catch (_: Exception) { }
         GoBackend.setAlwaysOnCallback {
             val intent = Intent(this, WireGuardControllerService::class.java)
                 .setAction(WireGuardControllerService.ACTION_UP)
