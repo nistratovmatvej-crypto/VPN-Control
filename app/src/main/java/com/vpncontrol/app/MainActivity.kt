@@ -265,7 +265,7 @@ class MainActivity : Activity() {
         apply.addView(text("Изменения маршрутизации и DNS вступят в силу после переподключения VPN.", 12f, muted))
         apply.addView(gap(8))
         apply.addView(button("ПЕРЕПОДКЛЮЧИТЬ VPN", true) {
-            if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала добавь профиль MyControl или импортируй конфигурацию", Toast.LENGTH_LONG).show()
+            if (!File(filesDir, "active.enc").exists()) Toast.makeText(this, "Сначала добавь профиль VPNcontrol или импортируй конфигурацию", Toast.LENGTH_LONG).show()
             else if (prefs.getString("routingMode", "all") == "include" && selected.isEmpty()) Toast.makeText(this, "Выбери хотя бы одно приложение", Toast.LENGTH_LONG).show()
             else applyRoutingChanges()
         })
@@ -291,7 +291,7 @@ class MainActivity : Activity() {
             profileRows.removeAllViews()
             val filtered = profiles.filter { it.name.contains(query, true) || it.id.contains(query, true) }
             profileRows.addView(text("${filtered.size} серверов найдено", 11f, muted))
-            if (filtered.isEmpty()) profileRows.addView(text(if (profiles.isEmpty()) "Пока нет серверов. Добавь профиль MyControl или импортируй конфигурацию." else "Ничего не найдено", 13f, muted))
+            if (filtered.isEmpty()) profileRows.addView(text(if (profiles.isEmpty()) "Пока нет серверов. Добавь профиль VPNcontrol или импортируй конфигурацию." else "Ничего не найдено", 13f, muted))
             filtered.forEach { profile ->
             val row=card(); val active=ProfileStore.activeId(this)==profile.id
             row.addView(text((if(active) "●  " else "○  ")+profile.name,16f,if(active)amber else white,true))
@@ -316,7 +316,7 @@ class MainActivity : Activity() {
         section("KILL SWITCH")
         val alwaysOn = Settings.Secure.getString(contentResolver,"always_on_vpn_app") == packageName
         val lockdown = try { Settings.Secure.getInt(contentResolver,"always_on_vpn_lockdown",0) == 1 } catch (_:Exception) { false }
-        val k=card();k.addView(line("Always-on VPN",if(alwaysOn)"Включён" else "Выключен",if(alwaysOn)green else amber));k.addView(line("Блокировка без VPN",if(lockdown)"Включена" else "Выключена",if(lockdown)green else amber));k.addView(gap(7));k.addView(button("ОТКРЫТЬ НАСТРОЙКИ KILL SWITCH",true){startActivity(Intent(Settings.ACTION_VPN_SETTINGS))});k.addView(text(if(lockdown)"Системный lockdown обнаружен. Android блокирует трафик вне VPN." else "Для включения выбери MyControl в системных настройках, включи Always-on VPN и затем «Блокировать подключения без VPN». Android не разрешает обычному приложению включать lockdown без действия пользователя.",11f,amber));k.addView(text("Важно: Kill Switch конфликтует с раздельным туннелированием. Приложения, не включённые в VPN-список, могут потерять интернет. Для режима «остальные приложения напрямую» системную блокировку лучше не включать.",11f,muted).apply{setPadding(0,dp(9),0,0)});addCard(k)
+        val k=card();k.addView(line("Always-on VPN",if(alwaysOn)"Включён" else "Выключен",if(alwaysOn)green else amber));k.addView(line("Блокировка без VPN",if(lockdown)"Включена" else "Выключена",if(lockdown)green else amber));k.addView(gap(7));k.addView(button("ОТКРЫТЬ НАСТРОЙКИ KILL SWITCH",true){startActivity(Intent(Settings.ACTION_VPN_SETTINGS))});k.addView(text(if(lockdown)"Системный lockdown обнаружен. Android блокирует трафик вне VPN." else "Для включения выбери VPNcontrol в системных настройках, включи Always-on VPN и затем «Блокировать подключения без VPN». Android не разрешает обычному приложению включать lockdown без действия пользователя.",11f,amber));k.addView(text("Важно: Kill Switch конфликтует с раздельным туннелированием. Приложения, не включённые в VPN-список, могут потерять интернет. Для режима «остальные приложения напрямую» системную блокировку лучше не включать.",11f,muted).apply{setPadding(0,dp(9),0,0)});addCard(k)
         section("DNS")
         val d=card();d.addView(line("Режим Private DNS",Settings.Global.getString(contentResolver,"private_dns_mode")?:"неизвестно"));d.addView(line("Имя DNS",Settings.Global.getString(contentResolver,"private_dns_specifier")?:"Автоматически"));d.addView(button("ОТКРЫТЬ НАСТРОЙКИ PRIVATE DNS",false){openPrivateDnsSettings()});addCard(d)
         section("РЕЗЕРВНЫЕ КОПИИ")
@@ -324,7 +324,7 @@ class MainActivity : Activity() {
         section("РАЗРЕШЕНИЯ")
         val a=card();a.addView(line("Статистика приложений",if(hasUsageAccess())"Разрешена" else "Не разрешена",if(hasUsageAccess())green else amber));a.addView(button("УПРАВЛЯТЬ РАЗРЕШЕНИЕМ",false){startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))});addCard(a)
         section("О ПРИЛОЖЕНИИ")
-        val about=card();about.addView(text("MyControl 0.6.0 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
+        val about=card();about.addView(text("VPNcontrol 0.6.0 · AmneziaWG",16f,white,true));about.addView(text("Ключи хранятся в Android Keystore. Экспортируемые резервные копии дополнительно защищаются отдельным паролем.",12f,muted));addCard(about)
     }
 
     private fun selectBestServer() {
@@ -376,8 +376,8 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){showToast("Профиль MyControl пока не установлен");return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
-    private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i); showToast("Подключаемся к MyControl…")}catch(e:Exception){showToast("Ошибка VPN: ${e.message}")}}
+    private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){showToast("Профиль VPNcontrol пока не установлен");return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
+    private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i); showToast("Подключаемся к VPNcontrol…")}catch(e:Exception){showToast("Ошибка VPN: ${e.message}")}}
     private fun stopVpn(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);showToast("Отключаем VPN…")}catch(e:Exception){showToast("Не удалось отключить: ${e.message}")}}
     private fun openPrivateDnsSettings(){try{startActivity(Intent("android.settings.PRIVATE_DNS_SETTINGS"))}catch(_:Exception){startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))}}
     private fun networkType():String{val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager;val n=cm.activeNetwork?:return "Нет соединения";val c=cm.getNetworkCapabilities(n)?:return "Неизвестно";return when{c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)->"Wi-Fi";c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)->"Мобильная сеть";c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)->"Ethernet";else->"Другое"}}
