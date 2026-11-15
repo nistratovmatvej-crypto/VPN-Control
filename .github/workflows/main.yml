@@ -160,6 +160,24 @@ jobs:
           keytool -list -keystore "$KEY" -storepass vpncontrol-debug-only -alias vpncontrol >/dev/null
           echo "Stable signing key restored."
 
+      - name: Validate built-in VPN profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WARP_HAIKU_CONFIG_B64"
+          test -n "$WARP_TANKA_CONFIG_B64"
+          test -n "$WARP_SONNET_CONFIG_B64"
+          for value in "$WARP_HAIKU_CONFIG_B64" "$WARP_TANKA_CONFIG_B64" "$WARP_SONNET_CONFIG_B64"; do
+            decoded="$(printf '%s' "$value" | base64 --decode)"
+            grep -Fq '[Interface]' <<< "$decoded"
+            grep -Fq '[Peer]' <<< "$decoded"
+            grep -Eq '^PrivateKey[[:space:]]*=' <<< "$decoded"
+            grep -Eq '^PublicKey[[:space:]]*=' <<< "$decoded"
+            grep -Eq '^Endpoint[[:space:]]*=' <<< "$decoded"
+            unset decoded
+          done
+          echo "Three embedded VPN profiles validated."
+
       - name: Build debug APK
         working-directory: ${{ steps.project.outputs.dir }}
         run: gradle --no-daemon --stacktrace assembleDebug
