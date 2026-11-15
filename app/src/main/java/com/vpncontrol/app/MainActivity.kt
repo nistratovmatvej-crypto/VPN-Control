@@ -25,8 +25,8 @@ import java.text.DecimalFormat
 
 class MainActivity : Activity() {
     private val bg = 0xFF111015.toInt(); private val panel = 0xFF1D1B24.toInt(); private val panel2 = 0xFF292631.toInt()
-    private val white = 0xFFF6F2FA.toInt(); private val muted = 0xFFAAA3B5.toInt(); private val amber = 0xFFB994FF.toInt()
-    private val blue = 0xFFD58BFF.toInt(); private val green = 0xFF9EDBC2.toInt()
+    private val white = 0xFFF6F2FA.toInt(); private val muted = 0xFFAAA3B5.toInt(); private val amber = 0xFF9B6DFF.toInt()
+    private val blue = 0xFFB18AFF.toInt(); private val green = 0xFF45D18B.toInt()
     private val prefs by lazy { getSharedPreferences("vpncontrol", MODE_PRIVATE) }
     private lateinit var root: LinearLayout; private lateinit var body: LinearLayout; private lateinit var nav: LinearLayout
     private var page = "home"; private var lastRenderedTunnelState = false; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
@@ -62,30 +62,87 @@ class MainActivity : Activity() {
         return LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, dp(8)); addView(text(a, 14f, white, true), LinearLayout.LayoutParams(0, -2, 1f)); addView(text(b, 13f, color, true)) }
     }
     private fun render() {
-        root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(bg); setPadding(dp(18),dp(10),dp(18),dp(6)) }
-        val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; addView(text("MYCONTROL",22f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text("●",17f,if(File(filesDir,"active.enc").exists())green else amber,true)) }
-        root.addView(header); root.addView(text("SECURE NETWORK  ·  0.6.0",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
+        root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(bg); setPadding(dp(20),dp(12),dp(20),dp(6)) }
+        val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(0,dp(5),0,dp(15)) }
+        val mark=TextView(this).apply { text="ϟ"; textSize=27f; gravity=Gravity.CENTER; setTextColor(0xFFB18AFF.toInt()); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF292033.toInt()); setStroke(dp(2),0xFF8D5DFF.toInt()) } }
+        header.addView(mark,LinearLayout.LayoutParams(dp(48),dp(48)).apply { rightMargin=dp(12) })
+        val brand=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+        brand.addView(text("VPNcontrol",25f,white,true))
+        brand.addView(text("AmneziaWG · Защищённое соединение",11f,muted))
+        header.addView(brand,LinearLayout.LayoutParams(0,-2,1f))
+        header.addView(topAction("▥") { page="monitor"; render() })
+        header.addView(topAction("⚙") { page="settings"; render() },LinearLayout.LayoutParams(dp(48),dp(48)).apply { leftMargin=dp(10) })
+        root.addView(header)
         val scroll=ScrollView(this).apply { isFillViewport=true }; body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,0,0,dp(8)) }; scroll.addView(body); root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         when(page){"home"->renderHome();"monitor"->renderMonitor();"automation"->renderAutomation();else->renderSettings()}
         nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(4)); background=shape(0xFF19171F.toInt(),18) }
-        listOf("home" to "⌂\nГлавная","monitor" to "⌁\nМониторинг","automation" to "◈\nПравила","settings" to "⚙\nНастройки").forEach { (id,title)-> val t=text(title,11f,if(page==id)amber else muted,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(5),0,dp(5));setOnClickListener{page=id;render()}}; nav.addView(t,LinearLayout.LayoutParams(0,-2,1f)) }
+        listOf("home" to "⌂\nГлавная","automation" to "☷\nПравила","settings" to "⚙\nНастройки").forEach { (id,title)-> val t=text(title,12f,if(page==id)amber else muted,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(6),0,dp(6));setOnClickListener{page=id;render()}}; nav.addView(t,LinearLayout.LayoutParams(0,-2,1f)) }
         root.addView(nav,LinearLayout.LayoutParams(-1,-2)); setContentView(root)
     }
+    private fun topAction(label:String, action:()->Unit):TextView = TextView(this).apply { text=label; textSize=22f; gravity=Gravity.CENTER; setTextColor(white); background=shape(panel2,50,0xFF393342.toInt()); setOnClickListener{action()} }
     private fun renderHome() {
-        val has=File(filesDir,"active.enc").exists(); val connected=WireGuardControllerService.isTunnelUp(); lastRenderedTunnelState=connected
-        body.addView(text("ТВОЯ СЕТЬ. ТВОИ ПРАВИЛА.",12f,muted,true).apply{setPadding(0,dp(14),0,dp(13))})
-        val hero=card().apply { gravity=Gravity.CENTER; setPadding(dp(18),dp(22),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF302342.toInt(),0xFF211B2E.toInt(),panel)).apply{cornerRadius=dp(26).toFloat();setStroke(dp(1),0xFF57416F.toInt())} }
-        hero.addView(text(if(connected)"ЗАЩИЩЁННОЕ СОЕДИНЕНИЕ" else "MYCONTROL",11f,if(connected)green else muted,true))
-        val circle=TextView(this).apply { text=if(connected)"✓" else "⏻"; textSize=42f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply{shape=GradientDrawable.OVAL;setColor(0xFF332641.toInt());setStroke(dp(3),if(connected)green else blue)}; setOnClickListener{if(connected)stopVpn()else requestVpnStart();render()} }
-        hero.addView(circle,LinearLayout.LayoutParams(dp(116),dp(116)).apply{topMargin=dp(18);bottomMargin=dp(14)})
-        hero.addView(text(if(connected)"Подключено" else if(has)"Готов к подключению" else "Сначала добавь сервер",20f,white,true))
-        hero.addView(text(if(has) prefs.getString("profileName","VPN-профиль")?:"VPN-профиль" else "Профиль не установлен",12f,muted).apply{setPadding(0,dp(5),0,dp(14))})
-        hero.addView(button(if(connected)"ОТКЛЮЧИТЬ VPN" else "ПОДКЛЮЧИТЬ VPN",true){if(connected)stopVpn()else requestVpnStart();render()})
-        addCard(hero)
-        section("СОСТОЯНИЕ СЕТИ")
-        val stats=card(); stats.addView(line("Подключение",networkType(),green)); stats.addView(line("IP интерфейса",currentIp())); stats.addView(line("DNS",dnsServers())); stats.addView(line("Профиль",if(has)"Добавлен" else "Не добавлен",if(has)green else amber)); addCard(stats)
-        section("БЫСТРЫЕ ДЕЙСТВИЯ")
-        val quick=card(); quick.addView(button("＋  Импортировать VPN-конфигурацию",false){openConfigPicker()}); quick.addView(gap(8)); quick.addView(button("Проверить соединение",false){runDiagnostics()}); addCard(quick)
+        val connected=WireGuardControllerService.isTunnelUp()
+        val profiles=ProfileStore.all(this).sortedByDescending { it.favorite }
+        lastRenderedTunnelState=connected
+        val hero=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(18),dp(20),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF302342.toInt(),0xFF211B2E.toInt(),panel)).apply { cornerRadius=dp(26).toFloat(); setStroke(dp(1),0xFF594078.toInt()) } }
+        val power=TextView(this).apply { text=if(connected)"✓" else "⏻"; textSize=43f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF211A30.toInt()); setStroke(dp(3),if(connected)green else blue) }; setOnClickListener { if(connected)stopVpn() else requestVpnStart(); handler.postDelayed({render()},350) } }
+        hero.addView(power,LinearLayout.LayoutParams(dp(118),dp(118)).apply { rightMargin=dp(18) })
+        val info=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+        info.addView(text(if(connected)"●  Подключено" else "●  Не подключено",21f,if(connected)green else muted,true))
+        info.addView(text(prefs.getString("profileName","VPN-профиль") ?: "VPN-профиль",14f,white,true).apply { setPadding(0,dp(9),0,dp(5)) })
+        info.addView(TextView(this).apply { text="Сменить профиль  ⌄"; textSize=13f; setTextColor(0xFFC5B6E8.toInt()); setOnClickListener{showProfileChooser()} })
+        info.addView(text(if(connected)"Туннель активен" else "Нажми питание для подключения",11f,muted))
+        hero.addView(info,LinearLayout.LayoutParams(0,-2,1f)); addCard(hero)
+        val counters=WireGuardControllerService.tunnelCounters()
+        val rx=counters?.first ?: TrafficStatsTracker.value(this,"total_rx")
+        val tx=counters?.second ?: TrafficStatsTracker.value(this,"total_tx")
+        val stats=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; background=shape(panel,20,0xFF37323F.toInt()); setPadding(dp(12),dp(13),dp(12),dp(13)) }
+        listOf(Triple("◉",if(connected)"Активен" else "Отключён","Статус"),Triple("↓",bytes(rx),"Получено"),Triple("↑",bytes(tx),"Отправлено")).forEachIndexed { index,item ->
+            val cell=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
+            cell.addView(text(item.first,19f,if(index==0)green else amber,true)); cell.addView(text(item.second,14f,white,true)); cell.addView(text(item.third,11f,muted))
+            stats.addView(cell,LinearLayout.LayoutParams(0,-2,1f))
+            if(index<2)stats.addView(View(this).apply{setBackgroundColor(0xFF393342.toInt())},LinearLayout.LayoutParams(dp(1),dp(42)))
+        }
+        body.addView(stats,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(20) })
+        section("МАРШРУТИЗАЦИЯ")
+        val routing=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
+        listOf(Triple("◎","Напрямую","Без VPN"),Triple("ϟ","Через VPN","Весь трафик через VPN")).forEachIndexed { index,item ->
+            val selected=(prefs.getString("routingMode","all") ?: "all")=="all" && index==1
+            val tile=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(13),dp(15),dp(10),dp(15)); background=shape(if(selected)0xFF29213A.toInt() else panel,20,if(selected)amber else 0xFF393342.toInt()); setOnClickListener { prefs.edit().putString("routingMode",if(index==0)"exclude" else "all").apply(); applyRoutingChanges(); render() } }
+            tile.addView(text(item.first+"   "+item.second,15f,white,true)); tile.addView(text(item.third,11f,muted))
+            routing.addView(tile,LinearLayout.LayoutParams(0,-2,1f).apply { if(index==0)rightMargin=dp(9) })
+        }
+        body.addView(routing,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(20) })
+        section("РЕКОМЕНДУЕМЫЕ ПРОФИЛИ")
+        val search=EditText(this).apply { hint="⌕  Поиск профилей"; textSize=14f; setSingleLine(true); setTextColor(white); setHintTextColor(muted); setPadding(dp(16),dp(12),dp(16),dp(12)); background=shape(panel,30,0xFF393342.toInt()) }
+        body.addView(search,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(10) })
+        val rows=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }; body.addView(rows)
+        fun populate(query:String) {
+            rows.removeAllViews()
+            profiles.filter { it.name.contains(query,true) }.forEach { profile ->
+                val active=ProfileStore.activeId(this)==profile.id
+                val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(16),dp(13),dp(15),dp(13)); background=shape(if(active)0xFF29213A.toInt() else panel,20,if(active)0xFF8D5DFF.toInt() else 0xFF302D37.toInt()); setOnClickListener { if(!active && !WireGuardControllerService.isTunnelUp()){ProfileStore.activate(this@MainActivity,profile.id);render()} else if(WireGuardControllerService.isTunnelUp())showToast("Сначала отключи VPN") } }
+                val name=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }; name.addView(text(profile.name,15f,white,true)); name.addView(text(if(active)"Активный профиль" else "Нажми, чтобы выбрать",11f,muted))
+                row.addView(name,LinearLayout.LayoutParams(0,-2,1f)); row.addView(text(if(active)"◉" else "○",23f,if(active)amber else muted,true))
+                rows.addView(row,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(7) })
+            }
+            if(profiles.isEmpty())rows.addView(text("Профили не найдены. Импортируй .conf.",13f,muted))
+        }
+        populate("")
+        search.addTextChangedListener(object:android.text.TextWatcher{override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){};override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){populate(s?.toString().orEmpty())};override fun afterTextChanged(s:android.text.Editable?){}})
+        section("НАСТРОЙКИ DNS")
+        val dns=card(); dns.addView(line("DNS-серверы",dnsServers(),green)); dns.addView(line("Сеть",networkType())); dns.addView(text("Настройки DNS и приложения с отдельными правилами доступны в разделе «Правила».",11f,muted)); addCard(dns)
+        val actions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
+        actions.addView(button("＋  Импортировать",true){openConfigPicker()},LinearLayout.LayoutParams(0,-2,1f))
+        actions.addView(button("Диагностика",false){runDiagnostics()},LinearLayout.LayoutParams(0,-2,1f).apply { leftMargin=dp(8) }); addCard(actions)
+    }
+    private fun showProfileChooser() {
+        val profiles=ProfileStore.all(this)
+        if(profiles.isEmpty()){openConfigPicker();return}
+        AlertDialog.Builder(this).setTitle("Выбрать профиль").setItems(profiles.map{it.name}.toTypedArray()){_,which->
+            if(WireGuardControllerService.isTunnelUp())showToast("Сначала отключи VPN")
+            else try{ProfileStore.activate(this,profiles[which].id);render()}catch(e:Exception){showToast("Не удалось переключить профиль")}
+        }.show()
     }
     private fun renderMonitor() {
         section("МОНИТОРИНГ ТУННЕЛЯ AMNEZIAWG")
