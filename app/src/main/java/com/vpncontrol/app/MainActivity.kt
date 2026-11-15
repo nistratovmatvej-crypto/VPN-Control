@@ -29,8 +29,8 @@ class MainActivity : Activity() {
     private val blue = 0xFFB18AFF.toInt(); private val green = 0xFF45D18B.toInt()
     private val prefs by lazy { getSharedPreferences("vpncontrol", MODE_PRIVATE) }
     private lateinit var root: LinearLayout; private lateinit var body: LinearLayout; private lateinit var nav: LinearLayout
-    private var page = "home"; private var lastRenderedTunnelState = false; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
-    private val refresh = object : Runnable { override fun run() { WireGuardControllerService.tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this@MainActivity, rx, tx) }; val actual = WireGuardControllerService.isTunnelUp(); if (page == "monitor") { body.removeAllViews(); renderMonitor() } else if (page == "home" && actual != lastRenderedTunnelState) render(); handler.postDelayed(this, 900) } }
+    private var page = "home"; private var lastRenderedTunnelState = false; private var lastRenderedPendingState = false; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
+    private val refresh = object : Runnable { override fun run() { WireGuardControllerService.tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this@MainActivity, rx, tx) }; val actual = WireGuardControllerService.isTunnelUp(this@MainActivity); val pending = prefs.getBoolean("vpnConnecting", false); if (page == "monitor") { body.removeAllViews(); renderMonitor() } else if (page == "home" && (actual != lastRenderedTunnelState || pending != lastRenderedPendingState)) render(); handler.postDelayed(this, 900) } }
 
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); window.statusBarColor = bg; window.navigationBarColor = bg; migrateLegacyConfig(); render(); handler.post(refresh) }
     override fun onResume() { super.onResume(); if (::root.isInitialized) render() }
@@ -81,23 +81,25 @@ class MainActivity : Activity() {
     }
     private fun topAction(label:String, action:()->Unit):TextView = TextView(this).apply { text=label; textSize=22f; gravity=Gravity.CENTER; setTextColor(white); background=shape(panel2,50,0xFF393342.toInt()); setOnClickListener{action()} }
     private fun renderHome() {
-        val connected=WireGuardControllerService.isTunnelUp()
+        val connected=WireGuardControllerService.isTunnelUp(this@MainActivity)
+        val pending=prefs.getBoolean("vpnConnecting", false)
         val profiles=ProfileStore.all(this).sortedByDescending { it.favorite }
         lastRenderedTunnelState=connected
+        lastRenderedPendingState=pending
         val hero=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(18),dp(20),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF302342.toInt(),0xFF211B2E.toInt(),panel)).apply { cornerRadius=dp(26).toFloat(); setStroke(dp(1),0xFF594078.toInt()) } }
-        val power=TextView(this).apply { text=if(connected)"✓" else "⏻"; textSize=43f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF211A30.toInt()); setStroke(dp(3),if(connected)green else blue) }; setOnClickListener { if(connected)stopVpn() else requestVpnStart(); handler.postDelayed({render()},350) } }
+        val power=TextView(this).apply { text=if(connected)"✓" else if(pending)"…" else "⏻"; textSize=43f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply { shape=GradientDrawable.OVAL; setColor(0xFF211A30.toInt()); setStroke(dp(3),if(connected)green else blue) }; setOnClickListener { if(connected)stopVpn() else requestVpnStart(); handler.postDelayed({render()},350) } }
         hero.addView(power,LinearLayout.LayoutParams(dp(118),dp(118)).apply { rightMargin=dp(18) })
         val info=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
-        info.addView(text(if(connected)"●  Подключено" else "●  Не подключено",21f,if(connected)green else muted,true))
+        info.addView(text(if(connected)"●  VPN ВКЛЮЧЁН" else if(pending)"●  ПОДКЛЮЧЕНИЕ…" else "●  VPN ВЫКЛЮЧЕН",19f,if(connected)green else if(pending)amber else muted,true))
         info.addView(text(prefs.getString("profileName","VPN-профиль") ?: "VPN-профиль",14f,white,true).apply { setPadding(0,dp(9),0,dp(5)) })
         info.addView(TextView(this).apply { text="Сменить профиль  ⌄"; textSize=13f; setTextColor(0xFFC5B6E8.toInt()); setOnClickListener{showProfileChooser()} })
-        info.addView(text(if(connected)"Туннель активен" else "Нажми питание для подключения",11f,muted))
+        info.addView(text(if(connected)"Защищённый туннель активен" else if(pending)"Ожидание запуска туннеля" else "Трафик идёт напрямую · нажми питание",11f,muted))
         hero.addView(info,LinearLayout.LayoutParams(0,-2,1f)); addCard(hero)
         val counters=WireGuardControllerService.tunnelCounters()
         val rx=counters?.first ?: TrafficStatsTracker.value(this,"total_rx")
         val tx=counters?.second ?: TrafficStatsTracker.value(this,"total_tx")
         val stats=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; background=shape(panel,20,0xFF37323F.toInt()); setPadding(dp(12),dp(13),dp(12),dp(13)) }
-        listOf(Triple("◉",if(connected)"Активен" else "Отключён","Статус"),Triple("↓",bytes(rx),"Получено"),Triple("↑",bytes(tx),"Отправлено")).forEachIndexed { index,item ->
+        listOf(Triple("◉",if(connected)"Включён" else if(pending)"Запуск…" else "Выключен","Статус"),Triple("↓",bytes(rx),"Получено"),Triple("↑",bytes(tx),"Отправлено")).forEachIndexed { index,item ->
             val cell=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER }
             cell.addView(text(item.first,19f,if(index==0)green else amber,true)); cell.addView(text(item.second,14f,white,true)); cell.addView(text(item.third,11f,muted))
             stats.addView(cell,LinearLayout.LayoutParams(0,-2,1f))
@@ -121,7 +123,7 @@ class MainActivity : Activity() {
             rows.removeAllViews()
             profiles.filter { it.name.contains(query,true) }.forEach { profile ->
                 val active=ProfileStore.activeId(this)==profile.id
-                val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(16),dp(13),dp(15),dp(13)); background=shape(if(active)0xFF29213A.toInt() else panel,20,if(active)0xFF8D5DFF.toInt() else 0xFF302D37.toInt()); setOnClickListener { if(!active && !WireGuardControllerService.isTunnelUp()){ProfileStore.activate(this@MainActivity,profile.id);render()} else if(WireGuardControllerService.isTunnelUp())showToast("Сначала отключи VPN") } }
+                val row=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; setPadding(dp(16),dp(13),dp(15),dp(13)); background=shape(if(active)0xFF29213A.toInt() else panel,20,if(active)0xFF8D5DFF.toInt() else 0xFF302D37.toInt()); setOnClickListener { if(!active)activateProfile(profile.id) } }
                 val name=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }; name.addView(text(profile.name,15f,white,true)); name.addView(text(if(active)"Активный профиль" else "Нажми, чтобы выбрать",11f,muted))
                 row.addView(name,LinearLayout.LayoutParams(0,-2,1f)); row.addView(text(if(active)"◉" else "○",23f,if(active)amber else muted,true))
                 rows.addView(row,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(7) })
@@ -140,9 +142,21 @@ class MainActivity : Activity() {
         val profiles=ProfileStore.all(this)
         if(profiles.isEmpty()){openConfigPicker();return}
         AlertDialog.Builder(this).setTitle("Выбрать профиль").setItems(profiles.map{it.name}.toTypedArray()){_,which->
-            if(WireGuardControllerService.isTunnelUp())showToast("Сначала отключи VPN")
-            else try{ProfileStore.activate(this,profiles[which].id);render()}catch(e:Exception){showToast("Не удалось переключить профиль")}
+            if(ProfileStore.activeId(this)!=profiles[which].id) activateProfile(profiles[which].id)
         }.show()
+    }
+    private fun activateProfile(id:String) {
+        try {
+            val wasRunning=WireGuardControllerService.isTunnelUp(this)
+            ProfileStore.activate(this,id)
+            if(wasRunning) {
+                prefs.edit().putBoolean("vpnConnecting",true).apply()
+                val intent=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_RECONNECT)
+                if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(intent) else startService(intent)
+                showToast("Переключаю профиль и перезапускаю туннель…")
+            } else showToast("Профиль выбран")
+            render()
+        } catch(e:Exception) { showToast("Не удалось переключить профиль") }
     }
     private fun renderMonitor() {
         section("МОНИТОРИНГ ТУННЕЛЯ AMNEZIAWG")
@@ -377,8 +391,8 @@ class MainActivity : Activity() {
     }
 
     private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){showToast("Профиль VPNcontrol пока не установлен");return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
-    private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i); showToast("Подключаемся к VPNcontrol…")}catch(e:Exception){showToast("Ошибка VPN: ${e.message}")}}
-    private fun stopVpn(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);showToast("Отключаем VPN…")}catch(e:Exception){showToast("Не удалось отключить: ${e.message}")}}
+    private fun startWireGuard(){try{prefs.edit().putBoolean("vpnConnecting",true).apply();render();val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i); showToast("Подключаемся к VPNcontrol…")}catch(e:Exception){showToast("Ошибка VPN: ${e.message}")}}
+    private fun stopVpn(){try{prefs.edit().putBoolean("vpnConnecting",false).apply();val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);showToast("Отключаем VPN…")}catch(e:Exception){showToast("Не удалось отключить: ${e.message}")}}
     private fun openPrivateDnsSettings(){try{startActivity(Intent("android.settings.PRIVATE_DNS_SETTINGS"))}catch(_:Exception){startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))}}
     private fun networkType():String{val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager;val n=cm.activeNetwork?:return "Нет соединения";val c=cm.getNetworkCapabilities(n)?:return "Неизвестно";return when{c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)->"Wi-Fi";c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)->"Мобильная сеть";c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)->"Ethernet";else->"Другое"}}
     private fun currentIp():String{try{val interfaces=java.net.NetworkInterface.getNetworkInterfaces();while(interfaces.hasMoreElements()){val ni=interfaces.nextElement();if(ni.isUp&&!ni.isLoopback){val addrs=ni.inetAddresses;while(addrs.hasMoreElements()){val a=addrs.nextElement();if(!a.isLoopbackAddress&&a is java.net.Inet4Address)return a.hostAddress?:"—"}}}}catch(_:Exception){};return "Недоступен"}
