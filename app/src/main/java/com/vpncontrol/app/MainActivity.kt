@@ -24,13 +24,13 @@ import java.net.InetAddress
 import java.text.DecimalFormat
 
 class MainActivity : Activity() {
-    private val bg = 0xFF0B1519.toInt(); private val panel = 0xFF14262B.toInt(); private val panel2 = 0xFF20383D.toInt()
-    private val white = 0xFFF2F8F6.toInt(); private val muted = 0xFF9CB3AE.toInt(); private val amber = 0xFF65D6C2.toInt()
-    private val blue = 0xFF4B9FD8.toInt(); private val green = 0xFF91DDB5.toInt()
+    private val bg = 0xFF111015.toInt(); private val panel = 0xFF1D1B24.toInt(); private val panel2 = 0xFF292631.toInt()
+    private val white = 0xFFF6F2FA.toInt(); private val muted = 0xFFAAA3B5.toInt(); private val amber = 0xFFB994FF.toInt()
+    private val blue = 0xFFD58BFF.toInt(); private val green = 0xFF9EDBC2.toInt()
     private val prefs by lazy { getSharedPreferences("vpncontrol", MODE_PRIVATE) }
     private lateinit var root: LinearLayout; private lateinit var body: LinearLayout; private lateinit var nav: LinearLayout
-    private var page = "home"; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
-    private val refresh = object : Runnable { override fun run() { WireGuardControllerService.tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this@MainActivity, rx, tx) }; if (page == "monitor") { body.removeAllViews(); renderMonitor() }; handler.postDelayed(this, 1800) } }
+    private var page = "home"; private var lastRenderedTunnelState = false; private var startAutomationAfterPermission = false; private var autoSelectAfterPermission = false; private val handler = Handler(Looper.getMainLooper()); private var rx0 = 0L; private var tx0 = 0L; private var sampleAt = 0L; private val rxHistory = mutableListOf<Float>()
+    private val refresh = object : Runnable { override fun run() { WireGuardControllerService.tunnelCounters()?.let { (rx, tx) -> TrafficStatsTracker.sampleTunnel(this@MainActivity, rx, tx) }; val actual = WireGuardControllerService.isTunnelUp(); if (page == "monitor") { body.removeAllViews(); renderMonitor() } else if (page == "home" && actual != lastRenderedTunnelState) render(); handler.postDelayed(this, 900) } }
 
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); window.statusBarColor = bg; window.navigationBarColor = bg; migrateLegacyConfig(); render(); handler.post(refresh) }
     override fun onResume() { super.onResume(); if (::root.isInitialized) render() }
@@ -49,10 +49,11 @@ class MainActivity : Activity() {
             catch (_: Exception) { Toast.makeText(this, "Старый профиль не удалось перенести. Сохрани его .conf отдельно.", Toast.LENGTH_LONG).show() }
         }
     }
+    private fun showToast(message: String) { val label = TextView(this).apply { text = message; textSize = 13f; setTextColor(white); setPadding(dp(18), dp(12), dp(18), dp(12)); background = shape(0xFF302A39.toInt(), 18, 0xFF59466B.toInt()) }; Toast(this).apply { duration = Toast.LENGTH_SHORT; view = label; setGravity(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, 0, dp(74)) }.show() }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun text(s: String, size: Float, color: Int = white, bold: Boolean = false): TextView = TextView(this).apply { text=s; textSize=size; setTextColor(color); if(bold)setTypeface(null,Typeface.BOLD); setPadding(0,dp(3),0,dp(3)) }
     private fun shape(color: Int, radius: Int = 20, stroke: Int = 0): GradientDrawable = GradientDrawable().apply { setColor(color); cornerRadius=dp(radius).toFloat(); if(stroke!=0)setStroke(dp(1),stroke) }
-    private fun card(): LinearLayout = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(17),dp(15),dp(17),dp(15)); background=shape(panel,22,0xFF29354A.toInt()) }
+    private fun card(): LinearLayout = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(17),dp(15),dp(17),dp(15)); background=shape(panel,22,0xFF393342.toInt()) }
     private fun button(s: String, primary: Boolean = false, fn: () -> Unit): TextView = TextView(this).apply { text=s; textSize=14f; gravity=Gravity.CENTER; setTextColor(if(primary) 0xFF17131F.toInt() else white); typeface=Typeface.DEFAULT_BOLD; setPadding(dp(15),dp(13),dp(15),dp(13)); background=shape(if(primary) amber else panel2,15); setOnClickListener{fn()} }
     private fun gap(h:Int=12): View = View(this).apply { layoutParams=LinearLayout.LayoutParams(1,dp(h)) }
     private fun addCard(v: View) { body.addView(v, LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(12) }) }
@@ -62,23 +63,23 @@ class MainActivity : Activity() {
     }
     private fun render() {
         root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(bg); setPadding(dp(18),dp(10),dp(18),dp(6)) }
-        val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; addView(text("VPN CONTROL",22f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text("●",17f,if(File(filesDir,"active.enc").exists())green else amber,true)) }
-        root.addView(header); root.addView(text("NETWORK CONTROL CENTER  ·  0.5.0",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
+        val header=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER_VERTICAL; addView(text("MYCONTROL",22f,white,true),LinearLayout.LayoutParams(0,-2,1f)); addView(text("●",17f,if(File(filesDir,"active.enc").exists())green else amber,true)) }
+        root.addView(header); root.addView(text("SECURE NETWORK  ·  0.6.0",10f,muted,true).apply{setPadding(0,dp(3),0,dp(12))})
         val scroll=ScrollView(this).apply { isFillViewport=true }; body=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(0,0,0,dp(8)) }; scroll.addView(body); root.addView(scroll,LinearLayout.LayoutParams(-1,0,1f))
         when(page){"home"->renderHome();"monitor"->renderMonitor();"automation"->renderAutomation();else->renderSettings()}
-        nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(4)); background=shape(0xFF111827.toInt(),18) }
+        nav=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(4)); background=shape(0xFF19171F.toInt(),18) }
         listOf("home" to "⌂\nГлавная","monitor" to "⌁\nМониторинг","automation" to "◈\nПравила","settings" to "⚙\nНастройки").forEach { (id,title)-> val t=text(title,11f,if(page==id)amber else muted,true).apply{gravity=Gravity.CENTER;setPadding(0,dp(5),0,dp(5));setOnClickListener{page=id;render()}}; nav.addView(t,LinearLayout.LayoutParams(0,-2,1f)) }
         root.addView(nav,LinearLayout.LayoutParams(-1,-2)); setContentView(root)
     }
     private fun renderHome() {
-        val has=File(filesDir,"active.enc").exists(); val connected=prefs.getBoolean("vpnWasStarted",false)
+        val has=File(filesDir,"active.enc").exists(); val connected=WireGuardControllerService.isTunnelUp(); lastRenderedTunnelState=connected
         body.addView(text("ТВОЯ СЕТЬ. ТВОИ ПРАВИЛА.",12f,muted,true).apply{setPadding(0,dp(14),0,dp(13))})
-        val hero=card().apply { gravity=Gravity.CENTER; setPadding(dp(18),dp(22),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF202044.toInt(),0xFF151D31.toInt(),panel)).apply{cornerRadius=dp(26).toFloat();setStroke(dp(1),0xFF34345F.toInt())} }
-        hero.addView(text(if(connected)"ЗАЩИЩЁННОЕ СОЕДИНЕНИЕ" else "VPN CONTROL",11f,if(connected)green else muted,true))
-        val circle=TextView(this).apply { text=if(connected)"✓" else "⏻"; textSize=42f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply{shape=GradientDrawable.OVAL;setColor(0xFF24203E.toInt());setStroke(dp(3),if(connected)green else blue)}; setOnClickListener{if(connected)stopVpn()else requestVpnStart();render()} }
+        val hero=card().apply { gravity=Gravity.CENTER; setPadding(dp(18),dp(22),dp(18),dp(20)); background=GradientDrawable(GradientDrawable.Orientation.TL_BR,intArrayOf(0xFF302342.toInt(),0xFF211B2E.toInt(),panel)).apply{cornerRadius=dp(26).toFloat();setStroke(dp(1),0xFF57416F.toInt())} }
+        hero.addView(text(if(connected)"ЗАЩИЩЁННОЕ СОЕДИНЕНИЕ" else "MYCONTROL",11f,if(connected)green else muted,true))
+        val circle=TextView(this).apply { text=if(connected)"✓" else "⏻"; textSize=42f; gravity=Gravity.CENTER; setTextColor(white); background=GradientDrawable().apply{shape=GradientDrawable.OVAL;setColor(0xFF332641.toInt());setStroke(dp(3),if(connected)green else blue)}; setOnClickListener{if(connected)stopVpn()else requestVpnStart();render()} }
         hero.addView(circle,LinearLayout.LayoutParams(dp(116),dp(116)).apply{topMargin=dp(18);bottomMargin=dp(14)})
         hero.addView(text(if(connected)"Подключено" else if(has)"Готов к подключению" else "Сначала добавь сервер",20f,white,true))
-        hero.addView(text(if(has) prefs.getString("profileName","VPN-профиль")?:"VPN-профиль" else "Конфигурация не импортирована",12f,muted).apply{setPadding(0,dp(5),0,dp(14))})
+        hero.addView(text(if(has) prefs.getString("profileName","VPN-профиль")?:"VPN-профиль" else "Профиль не установлен",12f,muted).apply{setPadding(0,dp(5),0,dp(14))})
         hero.addView(button(if(connected)"ОТКЛЮЧИТЬ VPN" else "ПОДКЛЮЧИТЬ VPN",true){if(connected)stopVpn()else requestVpnStart();render()})
         addCard(hero)
         section("СОСТОЯНИЕ СЕТИ")
@@ -144,7 +145,7 @@ class MainActivity : Activity() {
             setTextColor(white)
             setHintTextColor(muted)
             setPadding(dp(13), dp(11), dp(13), dp(11))
-            background = shape(panel2, 14, 0xFF31545A.toInt())
+            background = shape(panel2, 14, 0xFF51415F.toInt())
         }
         appCard.addView(search, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10); bottomMargin = dp(8) })
         val rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -173,7 +174,7 @@ class MainActivity : Activity() {
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 item.addView(toggles)
                 rows.addView(item)
-                val divider = View(this).apply { setBackgroundColor(0xFF294247.toInt()) }
+                val divider = View(this).apply { setBackgroundColor(0xFF393342.toInt()) }
                 rows.addView(divider, LinearLayout.LayoutParams(-1, dp(1)))
             }
         }
@@ -295,15 +296,15 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){Toast.makeText(this,"Сначала импортируй .conf",Toast.LENGTH_LONG).show();return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
-    private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);Toast.makeText(this,"Подключение запрошено",Toast.LENGTH_SHORT).show()}catch(e:Exception){Toast.makeText(this,"Ошибка VPN: ${e.message}",Toast.LENGTH_LONG).show()}}
-    private fun stopVpn(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i)}catch(e:Exception){Toast.makeText(this,"Не удалось отключить: ${e.message}",Toast.LENGTH_LONG).show()}}
+    private fun requestVpnStart(){startAutomationAfterPermission=false;if(!File(filesDir,"active.enc").exists()){showToast("Профиль MyControl пока не установлен");return};val i=VpnService.prepare(this);if(i!=null)startActivityForResult(i,42)else startWireGuard()}
+    private fun startWireGuard(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_UP);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i); showToast("Подключаемся к MyControl…")}catch(e:Exception){showToast("Ошибка VPN: ${e.message}")}}
+    private fun stopVpn(){try{val i=Intent(this,WireGuardControllerService::class.java).setAction(WireGuardControllerService.ACTION_DOWN);if(android.os.Build.VERSION.SDK_INT>=26)startForegroundService(i)else startService(i);showToast("Отключаем VPN…")}catch(e:Exception){showToast("Не удалось отключить: ${e.message}")}}
     private fun openPrivateDnsSettings(){try{startActivity(Intent("android.settings.PRIVATE_DNS_SETTINGS"))}catch(_:Exception){startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))}}
     private fun networkType():String{val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager;val n=cm.activeNetwork?:return "Нет соединения";val c=cm.getNetworkCapabilities(n)?:return "Неизвестно";return when{c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)->"Wi-Fi";c.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)->"Мобильная сеть";c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)->"Ethernet";else->"Другое"}}
     private fun currentIp():String{try{val interfaces=java.net.NetworkInterface.getNetworkInterfaces();while(interfaces.hasMoreElements()){val ni=interfaces.nextElement();if(ni.isUp&&!ni.isLoopback){val addrs=ni.inetAddresses;while(addrs.hasMoreElements()){val a=addrs.nextElement();if(!a.isLoopbackAddress&&a is java.net.Inet4Address)return a.hostAddress?:"—"}}}}catch(_:Exception){};return "Недоступен"}
     private fun dnsServers():String{val cm=getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager;val n=cm.activeNetwork?:return "—";val lp=cm.getLinkProperties(n)?:return "—";return lp.dnsServers.joinToString(", "){it.hostAddress?:""}.ifBlank{"Не определены"}}
     private fun connectionDuration():String{if(!prefs.getBoolean("vpnWasStarted",false))return "Не подключён";val start=prefs.getLong("connectedAt",0L);if(start<=0)return "Подключение активно";val sec=((System.currentTimeMillis()-start)/1000).coerceAtLeast(0);return String.format("%02d:%02d:%02d",sec/3600,(sec%3600)/60,sec%60)}
-    private inner class TrafficGraphView:View(this@MainActivity){private val paint=Paint(Paint.ANTI_ALIAS_FLAG);override fun onDraw(canvas:Canvas){super.onDraw(canvas);val w=width.toFloat();val h=height.toFloat();paint.color=0xFF2A3548.toInt();paint.strokeWidth=1f;for(i in 1..3)canvas.drawLine(0f,h*i/4,w,h*i/4,paint);if(rxHistory.size<2)return;val max=(rxHistory.maxOrNull()?:1f).coerceAtLeast(1f);paint.color=amber;paint.strokeWidth=dp(2).toFloat();paint.style=Paint.Style.STROKE;val path=android.graphics.Path();rxHistory.forEachIndexed{index,value->val x=w*index/(rxHistory.size-1).coerceAtLeast(1);val y=h-(value/max)*(h-dp(8))-dp(4);if(index==0)path.moveTo(x,y)else path.lineTo(x,y)};canvas.drawPath(path,paint);paint.style=Paint.Style.FILL}}
+    private inner class TrafficGraphView:View(this@MainActivity){private val paint=Paint(Paint.ANTI_ALIAS_FLAG);override fun onDraw(canvas:Canvas){super.onDraw(canvas);val w=width.toFloat();val h=height.toFloat();paint.color=0xFF393342.toInt();paint.strokeWidth=1f;for(i in 1..3)canvas.drawLine(0f,h*i/4,w,h*i/4,paint);if(rxHistory.size<2)return;val max=(rxHistory.maxOrNull()?:1f).coerceAtLeast(1f);paint.color=amber;paint.strokeWidth=dp(2).toFloat();paint.style=Paint.Style.STROKE;val path=android.graphics.Path();rxHistory.forEachIndexed{index,value->val x=w*index/(rxHistory.size-1).coerceAtLeast(1);val y=h-(value/max)*(h-dp(8))-dp(4);if(index==0)path.moveTo(x,y)else path.lineTo(x,y)};canvas.drawPath(path,paint);paint.style=Paint.Style.FILL}}
     private fun bytes(v:Long):String{if(v<0)return "Недоступно";val units=arrayOf("Б","КБ","МБ","ГБ","ТБ");var x=v.toDouble();var i=0;while(x>=1024&&i<units.lastIndex){x/=1024;i++};return "${DecimalFormat("0.0").format(x)} ${units[i]}"}
     private fun speed(v:Double):String="${bytes(v.toLong())}/с"
     private fun runDiagnostics(){Thread{val start=System.currentTimeMillis();val result=try{val ok=InetAddress.getByName("1.1.1.1").isReachable(2500);if(ok)"Узел 1.1.1.1 доступен · ${System.currentTimeMillis()-start} мс" else "Ответ не получен. ICMP может блокироваться сетью."}catch(e:Exception){"Ошибка сети: ${e.javaClass.simpleName}"};runOnUiThread{prefs.edit().putString("lastDiagnostic",result).apply();Toast.makeText(this,result,Toast.LENGTH_LONG).show();if(page=="monitor"){body.removeAllViews();renderMonitor()}}}.start()}
